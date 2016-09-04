@@ -4,7 +4,7 @@
 
 
 typedef struct {
-   short n[16];
+   unsigned short n[16];
 } long_number;
 
 void printbin (int v){
@@ -49,7 +49,23 @@ void print(long_number n)
    mpz_clear(n2);
 }
 
-int even(long_number n) {
+int is_zero(long_number n) {
+    for (int i = 0; i < 16; i++)
+        if (n.n[i])
+            return 0;
+    return 1;
+}
+
+int is_one(long_number n) {
+    if (n.n[0] != 1)
+        return 0;
+    for (int i = 1; i < 16; ++i)
+        if (n.n[i])
+            return 0;
+    return 1;
+}
+
+int is_even(long_number n) {
     return ((1 & n.n[0]) == 1)? 0 : 1;
 }
 
@@ -107,6 +123,23 @@ long_number sum(long_number a, long_number b) {
     return result;
 }
 
+long_number mult(long_number a, long_number b) {
+    if (is_zero(b)) {
+        long_number zero;
+        for (int i = 0; i < 16; i++)
+            zero.n[i] = 0;
+        return zero;
+    }
+    else if (is_one(b))
+        return a;
+    else {
+        if (is_even(b))
+            return mult(lshift(a),rshift(b));
+        else
+            return sum(mult(lshift(a),rshift(b)), a);
+    }
+}
+
 int main(void) {
     long_number LN, LM;
     for (int i = 0; i < 16; i++) {
@@ -117,12 +150,9 @@ int main(void) {
     LM.n[0] = 59292;
     LN.n[1] = 12;
     LM.n[1] = 3445;
-    //printf("a: ");
+
     print(LN);
-    //printf("b: ");
     print(LM);
-    long_number suma = sum(LN, LM);
-    //printf("a+b: ");
-    print(suma);
+    print(mult(LN,LM));
     return 0;
 }
