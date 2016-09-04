@@ -76,7 +76,8 @@ long_number lshift(long_number n) {
 }
 
 long_number sum(long_number a, long_number b) {
-    short carry = 0, mask = 1, abit = 0, bbit = 0;
+    int carry = 0, mask = 1;
+    short abit = 0, bbit = 0;
     long_number result;
     for (int i = 0; i < 16; i++)
         result.n[i] = 0;
@@ -89,8 +90,12 @@ long_number sum(long_number a, long_number b) {
                 result.n[i] = result.n[i] | carry;
                 carry = mask;
             }
-            else if ((abit ^ bbit) && carry == 0)  //MAL, VER XOR CON CARRY 1
-                result.n[i] = result.n[i] | (mask >> 1);
+            else if (abit ^ bbit) {
+                if (carry == 0)
+                    result.n[i] = result.n[i] | (mask >> 1);
+                else
+                    carry = mask;
+            }
             else {
                 result.n[i] = result.n[i] | carry;
                 carry = 0;
@@ -113,11 +118,11 @@ int main(void) {
     LN.n[1] = 12;
     LM.n[1] = 3445;
     //printf("a: ");
-    printl(LN);
+    print(LN);
     //printf("b: ");
-    printl(LM);
+    print(LM);
     long_number suma = sum(LN, LM);
     //printf("a+b: ");
-    printl(suma);
+    print(suma);
     return 0;
 }
