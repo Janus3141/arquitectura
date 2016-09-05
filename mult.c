@@ -11,7 +11,11 @@ unsigned mult(unsigned a, unsigned b) {
         return mult((a<<1),b>>1) + mult(a,(b & 1));
 }
 
-
+/*
+* El programa debe recibir dos enteros como argumento,
+* calcula su producto con la funcion mult e imprime el
+* resultado en salida estandar.
+*/
 int main(int argc, char const *argv[])
 {
     if (argc < 3)
