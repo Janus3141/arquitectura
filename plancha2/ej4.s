@@ -1,12 +1,12 @@
 .data
-fmt:
-    .string "%d"
-entero:
-    .long -100
-funcs:
-    .quad f1
-    .quad f2
-    .quad f3
+    fmt:
+        .string "%d"
+    entero:
+        .long -100
+    funcs:
+        .quad f1
+        .quad f2
+        .quad f3
 
 .text
     f1: movl $0,%esi; movq $fmt, %rdi; call printf; jmp fin
@@ -23,7 +23,7 @@ funcs:
         call scanf
         xorq %rax,%rax
         ## COMPLETAR CON DOS INSTRUCCIONES !!!!!!!!!!!!
-        jmp *%rdx
+        ##jmp *%rdx
     
     fin:
         movq %rbp,%rsp; popq %rbp; ret
