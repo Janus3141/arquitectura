@@ -5,7 +5,7 @@
     findstr:
         movq %rdx, %rcx
         cld
-        lodsb
+        movq (%rsi), %rax
         repne scasb
         je success
         movq $-1, %rax
@@ -29,29 +29,33 @@
 
     .global fuerzabruta
     fuerzabruta:
-        movq %rcx, %r9 # Guardo long de segundo argumento
+        movq %rsi, %r8      # Guardo puntero a segundo argumento        
+        movq %rcx, %r9      # Guardo long de segundo argumento
+        movq %rdi, %r10     # Guardo puntero a primer argumento
         subq %rcx, %rdx
-        incq %rdx # rdx = rdx - rcx + 1
-        movq %rdx, %r13
-        movq %rsi, %r8 # Guardo puntero a segundo argumento
-        movq %rdi, %r10 # Guardo puntero a primer argumento
+        incq %rdx 
+        movq %rdx, %r12     # r12 = rdx - rcx + 1
+        xorq %r13, %r13
         mainloop:
             call findstr
             cmpq $-1, %rax
-            jne compare
+            je failed
         compare:
-            movq %rdx, %r12 # Indice a retornar donde comienza la subcadena buscada
+            addq %rax, %r13     # r13: Indice a retornar
+            subq %rax, %r12
+            jl failed
             movq %r9, %rdx
-            movq %r8, %rsi
+            decq %rdi
             call cmpstr
             cmpq $1, %rax
-            je success
-            subq %r12, %r13
-            jz fail
-            movq %r13, %rdx
+            je succeed
+            movq %r12, %rdx
+            movq %r10, %rdi
+            addq %r13, %rdi
+            movq %r8, %rsi
             jmp mainloop
         succeed:
-            movq %r12, %rax
+            movq %r13, %rax
             ret
         failed:
             movq $-1, %rax
