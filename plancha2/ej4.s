@@ -22,8 +22,9 @@
         xorq %rax,%rax
         call scanf
         xorq %rax,%rax
-        ## COMPLETAR CON DOS INSTRUCCIONES !!!!!!!!!!!!
-        ##jmp *%rdx
+        movq $funcs, %rdx
+        #movq $funcs(%rcx,)
+        jmp *%rdx
     
     fin:
         movq %rbp,%rsp; popq %rbp; ret
