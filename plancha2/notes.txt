@@ -1,6 +1,0 @@
-int findstr(char *s, char *S, long len, long len2)
-
-s -> rdi
-S -> rsi
-len -> rdx
-len2 -> rcx

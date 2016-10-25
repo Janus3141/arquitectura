@@ -7,7 +7,7 @@ setjmp2:
 	movq %rbx, 32(%rdi)
 	movq %rbp, 40(%rdi)
 	movq %rsp, 48(%rdi)
-    movq (%rsp), %rax
+	movq (%rsp), %rax
 	movq %rax, 56(%rdi)
 	xorq %rax, %rax
 	ret
