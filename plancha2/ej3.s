@@ -36,7 +36,7 @@
         incq %rdx 
         movq %rdx, %r12     # r12 = rdx - rcx + 1
         xorq %r13, %r13
-        mainloop:
+        find:
             call findstr
             cmpq $-1, %rax
             je failed
@@ -53,7 +53,7 @@
             movq %r10, %rdi
             addq %r13, %rdi
             movq %r8, %rsi
-            jmp mainloop
+            jmp find
         succeed:
             movq %r13, %rax
             ret
