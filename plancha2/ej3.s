@@ -1,5 +1,3 @@
-.data
-
 .text
     .global findstr
     findstr:
@@ -56,6 +54,7 @@
             jmp find
         succeed:
             movq %r13, %rax
+            decq %rax
             ret
         failed:
             movq $-1, %rax
