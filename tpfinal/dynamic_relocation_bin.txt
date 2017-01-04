@@ -1,0 +1,14 @@
+
+binario:     file format elf32-i386
+
+DYNAMIC RELOCATION RECORDS
+OFFSET   TYPE              VALUE 
+08049a24 R_386_GLOB_DAT    __gmon_start__
+08049a34 R_386_JUMP_SLOT   time@GLIBC_2.0
+08049a38 R_386_JUMP_SLOT   sqrtf@GLIBC_2.0
+08049a3c R_386_JUMP_SLOT   puts@GLIBC_2.0
+08049a40 R_386_JUMP_SLOT   __gmon_start__
+08049a44 R_386_JUMP_SLOT   __libc_start_main@GLIBC_2.0
+08049a48 R_386_JUMP_SLOT   fmod@GLIBC_2.0
+
+
