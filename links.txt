@@ -1,9 +1,0 @@
-https://linux.die.net/man/3/alarm
-https://www.tutorialspoint.com/c_standard_library/signal_h.htm
-https://en.wikipedia.org/wiki/Sigaction
-http://www.linuxprogrammingblog.com/all-about-linux-signals?page=3
-https://linux.die.net/man/2/poll
-
-
-SA_NODEFER: Do not prevent the signal from being received from within its own signal handler.
-SA_NOMASK is an obsolete, non-standard synonym for this flag.
