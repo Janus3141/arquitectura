@@ -3,6 +3,7 @@ https://www.tutorialspoint.com/c_standard_library/signal_h.htm
 https://en.wikipedia.org/wiki/Sigaction
 http://www.linuxprogrammingblog.com/all-about-linux-signals?page=3
 https://linux.die.net/man/2/poll
+http://stackoverflow.com/questions/31882797/how-to-use-sigrtmax-and-sigrtmin
 
 
 SA_NODEFER: Do not prevent the signal from being received from within its own signal handler.
