@@ -4,6 +4,7 @@ https://en.wikipedia.org/wiki/Sigaction
 http://www.linuxprogrammingblog.com/all-about-linux-signals?page=3
 https://linux.die.net/man/2/poll
 http://stackoverflow.com/questions/31882797/how-to-use-sigrtmax-and-sigrtmin
+http://pubs.opengroup.org/onlinepubs/9699919799/functions/contents.html
 
 http://www.2net.co.uk/tutorial/periodic_threads
 http://man7.org/linux/man-pages/man2/timer_create.2.html
