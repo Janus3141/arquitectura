@@ -5,6 +5,8 @@ http://www.linuxprogrammingblog.com/all-about-linux-signals?page=3
 https://linux.die.net/man/2/poll
 http://stackoverflow.com/questions/31882797/how-to-use-sigrtmax-and-sigrtmin
 
+http://www.2net.co.uk/tutorial/periodic_threads
+http://man7.org/linux/man-pages/man2/timer_create.2.html
 
 SA_NODEFER: Do not prevent the signal from being received from within its own signal handler.
 SA_NOMASK is an obsolete, non-standard synonym for this flag.
