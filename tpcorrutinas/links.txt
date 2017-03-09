@@ -9,5 +9,9 @@ http://pubs.opengroup.org/onlinepubs/9699919799/functions/contents.html
 http://www.2net.co.uk/tutorial/periodic_threads
 http://man7.org/linux/man-pages/man2/timer_create.2.html
 
+http://www.tutorialspoint.com/unix_system_calls/pipe.htm
+http://stackoverflow.com/questions/13041416/redirect-stdout-of-two-processes-to-another-processs-stdin-in-linux-c
+http://man7.org/linux/man-pages/man2/dup.2.html
+
 SA_NODEFER: Do not prevent the signal from being received from within its own signal handler.
 SA_NOMASK is an obsolete, non-standard synonym for this flag.
