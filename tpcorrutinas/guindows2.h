@@ -3,7 +3,22 @@
 
 #include <setjmp.h>
 
-typedef jmp_buf task;
+typedef struct _task {
+    jmp_buf buf;
+    int level;
+    struct _task *next;
+    int msec;
+} task;
+
+#define TASK_NEW (SIGRTMIN)
+#define TASK_YIELD (SIGRTMIN+1)
+
+#define TICK 7
+#define QUANTUM 2
+
+#define TIME_L1 (QUANTUM*TICK)
+#define TIME_L2 (QUANTUM*TICK*5)
+#define TIME_L3 (QUANTUM*TICK*25)
 
 #define TPILA "4096"
 #define CREATE_STACK(t, f) do{if(setjmp(t)) f(); asm("subq $"TPILA", %rsp");}while(0)

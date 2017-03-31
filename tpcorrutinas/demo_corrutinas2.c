@@ -2,66 +2,43 @@
 #include <signal.h>
 #include "guindows2.h"
 #include <string.h>
+#include <unistd.h>
+#include <signal.h>
 
 
-struct sigaction {
-	void (*sa_handler)(int);      /* address of signal handler */
-	sigset_t sa_mask;                 /* additional signals to block */
-	int sa_flags;                /* signal options */
-	void (*sa_sigaction)(int, siginfo_t *, void*);
-};
+void sched(int signum, siginfo_t *data, void* extra)
+{
+    static task *L1_top, *L2_top, *L3_top, *L4_top;
+    static task *L1_bottom, *L2_bottom, *L3_bottom, *L4_bottom;
 
+    struct sigevent se;
+    se.sigev_signo = PROCESS_YIELD;
 
-task t1, t2, tmain, tsched;
+    timer_t timerID;
+    timer_create(CLOCK_REALTIME, &se, &timerID);
 
-static int i;
+    struct itimerspec time_setting;
+    time_setting.it_interval.tv_sec = 0;
+    time_setting.it_interval.tv_nsec = 0;
+    time_setting.it_value.tv_sec = 0;
 
-void fsched(){
-	for(;;){
-		if(i++%2) ACTIVATE(t1);
-		else ACTIVATE(t2);
-	}
+    if (signum == TASK_NEW) {
+        task *new_task = data->si_value.sival_ptr;
+        if (L1_bottom != NULL)
+            L1_bottom.next = new_task;
+        else
+            L1_top = new_task;
+        L1_bottom = new_task;
+        time_setting.it_value.tv_nsec = TIME_L1;
+        timer_settime(timerID, 0, &time_setting, NULL);
+        ACTIVATE(L1_top.buf);
+    }
+    else if (signum == TASK_YIELD) {
+    }
 }
 
-void hacer_proceso(char *name) {
-    pid_t p;
-    p = fork();
-    if (p < 0)
-        fprintf(stderr, "Error en creación de proceso.\n");
-    else if (p == 0)
-        execlp(name,NULL);
-    else
-        wait(0);
-    return;
-}
 
-void handler(int sig){
-	alarm(1);
-	if(i % 2) YIELD(t2);
-	else YIELD(t1);
-}
-
-int main(void) {
-	stack(t1, ft1);
-	stack(t2, ft2);
-	stack(tsched, fsched);
-
-	struct sigaction act;
-	memset(&act,'\0', sizeof(act));
-        act.sa_handler = &handler;
-
-        act.sa_flags = SA_NODEFER;
-        if (sigaction(SIGALRM, &act, NULL) < 0) {
-                perror ("sigaction");
-                return 1;
-        }
-
-	alarm(1);
-	TRANSFER(tmain, t1);
+int main(void)
+{
 	return 0;
 }
-
-//MULTITAREA APROPIATIVA
-//un sistema op moderno suele usar un mecanismo similar (basado en temporizadores e interrupciones) para proveer multitarea. A esto se le llama multitarea apropiativa
-//(Los procesos no se enteran ni tienen que hacer nada para convivir con otros procesos).
-//El SO cambia de tarea de prepo (preempt) y de forma transparente.
