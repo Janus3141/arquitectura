@@ -17,11 +17,7 @@ typedef struct _task {
 #define MS 1000
 #define TICK 5
 #define QUANTUM 4
-
-#define TIME_L0 (QUANTUM*TICK*MS)
-#define TIME_L1 (QUANTUM*TICK*MS*2)
-#define TIME_L2 (QUANTUM*TICK*MS*4)
-#define TIME_L3 (QUANTUM*TICK*MS*8)
+#define TIME_L(x) (QUANTUM*TICK*MS*(1<<(x)))
 
 #define TPILA "4096"
 #define CREATE_STACK(t, f) do{if(setjmp(t)) f(); asm("subq $"TPILA", %rsp");}while(0)
