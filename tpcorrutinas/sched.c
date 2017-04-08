@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include <signal.h>
-#include "guindows2.h"
+#include "sched.h"
 #include <string.h>
 #include <unistd.h>
-#include <signal.h>
 
 
 void error(char *m)
