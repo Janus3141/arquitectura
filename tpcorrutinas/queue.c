@@ -5,6 +5,7 @@ typedef struct _q_elem {
     // Estructura para cada elemento de la cola
     void *data;
     struct _q_elem *next;
+    struct _q_elem *prev;
 } q_elem;
 
 
@@ -33,13 +34,10 @@ void queue_destroy(queue q)
     // Destruye la cola y todo su contenido
     // No se provee proteccion contra un fallo de free()
     if (q->front != NULL) {
-        q_elem helper;
         while (q->front.next != NULL) {
-            helper = q->front.next;
-            free(q->front);
-            q->front = helper;
+            q->front = q->front.next;
+            free(q->front.prev);
         }
-        free(helper);
     }
     free(q);
 }
@@ -59,12 +57,14 @@ void queue_insert(queue q, void *elem)
     if (new == NULL) error("No space to allocate.");
     new->data = elem;
     new->next = NULL;
+    new->prev = NULL;
     if (queue_size(q) == 0) {
         q->front = new;
         q->back = new;
     }
     else {
         q->back.next = new;
+        new->prev = q->back;
         q->back = new;
     }
     q->size++;
@@ -86,9 +86,8 @@ void *queue_pop(queue q)
         q->back = NULL;
     q->size--;
     void *r = q->front.data;
-    q_elem *rem = q->front;
     q->front = q->front.next;
-    free(rem);
+    free(q->front.prev);
+    q->front.prev = NULL;
     return r;
 }
-
