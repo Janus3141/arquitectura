@@ -1,25 +1,9 @@
 #include <malloc.h>
-
-
-typedef struct _q_elem {
-    // Estructura para cada elemento de la cola
-    void *data;
-    struct _q_elem *next;
-    struct _q_elem *prev;
-} q_elem;
-
-
-typedef struct _queue {
-    // Estructura para contener el inicio y final de la cola
-    q_elem *front;
-    q_elem *back;
-    int size;
-} *queue;
+#include "queue.h"
 
 
 queue queue_init(void)
 {
-    // Devuelve la cola vacia
     queue q = malloc(sizeof(struct _q));
     if (q == NULL) error("No space to allocate.");
     q->front = NULL;
@@ -31,7 +15,6 @@ queue queue_init(void)
 
 void queue_destroy(queue q)
 {
-    // Destruye la cola y todo su contenido
     // No se provee proteccion contra un fallo de free()
     if (q->front != NULL) {
         while (q->front.next != NULL) {
@@ -51,7 +34,6 @@ int queue_size(queue q)
 
 void queue_insert(queue q, void *elem)
 {
-    // Inserta un elemento en la cola, se guarda como su 'back'
     // Se termina el programa en caso de un fallo en malloc
     q_elem *new = malloc(sizeof(q_elem));
     if (new == NULL) error("No space to allocate.");
@@ -74,12 +56,7 @@ void queue_insert(queue q, void *elem)
 
 void *queue_pop(queue q)
 {
-    /*
-    * Devuelve el dato guardado en el front de la cola.
-    * Si la cola esta vacia, se devuelve NULL.
-    * Notar que no se diferencia entre esto y haber guardado NULL
-    * en la cola (lo cual pudo haber sido un error).
-    */ 
+    
     if (queue_size(q) == 0)
         return NULL;
     if (queue_size(q) == 1)

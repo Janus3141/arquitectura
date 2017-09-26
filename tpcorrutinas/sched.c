@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <sched.h>
 
 
 void error(char *m)
@@ -15,17 +16,31 @@ void error(char *m)
 }
 
 
-void create_routine(void *(*f)(void *), void *arg, task *new)
+void take_stack(void)
 {
-    jmp_buf ret;
-    if (setjmp(ret) == 0)
-        start_routine(f,arg,new,ret);
-    else
-        return;
+    static int cuantas = 1;
+    static int prof;
+    prof = TPILA*cuantas;
+    char rsp_sub[20];
+    sprintf(rsp_sub, "subq $%d, %rsp", prof);
+    asm(rsp_sub);
+    cuantas++;
+    return;
 }
 
 
-void start_routine(void *(*f)(void *), void *arg, task *new, jmp_buf b)
+void create_routine(tareaF f, void *arg, task *new)
+{
+    jmp_buf *ret = malloc(sizeof(jmp_buf));
+    if (setjmp(ret) == 0)
+        start_routine(f,arg,new,ret);
+    else
+        free(ret);
+    return;
+}
+
+
+void start_routine(tareaF f, void *arg, task *new, jmp_buf *b)
 {
     /* Solo para ser llamada por create_routine() */
     *new = {0}; /* Inicializo la estructura en 0 para no hacerlo por componente */
@@ -35,7 +50,7 @@ void start_routine(void *(*f)(void *), void *arg, task *new, jmp_buf b)
     union sigval task_pointer = {.sival_ptr = new};
     if (setjmp(*jb) == 0) {
         sigqueue(getpid(), TASK_NEW, task_pointer);
-        longjmp(b,1);
+        longjmp(*b,1);
     }
     else {
         new->mem_start = take_stack();
@@ -43,6 +58,7 @@ void start_routine(void *(*f)(void *), void *arg, task *new, jmp_buf b)
         new->st = ZOMBIE;
         FINALIZE(task_pointer);
     }
+    while();
 }
 
 
@@ -62,21 +78,30 @@ fret stop_routine(task *t)
 }
 
 
-void kill_routine(task *t)
-{
-    free_stack(t->mem_start);
-    free(t->buf);
-}
-
-
 void start_sched(task *t)
 {
-    // Setear manejo de señales y memoria
-    timer_t timerID;
+    sigset_t block_these;
+    if(!(sigfillset(&block_these)))
+        error("Error in signal config");
+    struct sigaction sa = {.sa_sigaction = sched,
+                          .sa_mask = block_these,
+                          .sa_flags = SA_SIGINFO
+                          };
+    if (!(sigaction(TASK_YIELD, &sa, NULL)))
+        error("Error setting sigaction");
+    if (!(sigaction(TASK_NEW, &sa, NULL)))
+        error("Error setting sigaction");
+    struct sigevent se = {.sigev_notify = SIGEV_SIGNAL,
+                         .sigev_signo = TASK_YIELD};
     if (!(timer_create(CLOCK_REALTIME, &se, &timerID)))
         error("Error creating timer");
     siginfo_t data = {.si_value.sival_ptr = t};
+    jmp_buf *jb = malloc(sizeof(jmp_buf));
+    task maintask = {.buf = jb, st = READY};
+    timer_t timerID;
+    YIELD(&maintask);
     sched(TASK_NEW, &data, &timerID);
+    return;
 }
 
 
@@ -94,17 +119,14 @@ void sched(int signum, siginfo_t *data, void* extra)
     static struct itimerspec time_setting = {0};
     static int index = 0;
     static task *t;
-    
-    t = (task *) data->si_value.sival_ptr;
 
-    if (signum == TASK_KILL) {
-        
-    }
+
+    t = (task *) data->si_value.sival_ptr;
 
     t->st = READY;
     YIELD(t);
 
-    else if (signum == TASK_NEW) {
+    if (signum == TASK_NEW) {
         if (queue_size(L0) > 0) {
             queue_insert(L0, t);
             t = (task *) queue_pop(L0);
@@ -117,10 +139,9 @@ void sched(int signum, siginfo_t *data, void* extra)
             t->level++;
         queue_insert(t_queues[t->level], t);
         for (index = 0; index < 5; index++) {
-            if (queue_size(t_queues[index]) > 0) {
-                if ((t = (task *) queue_pop(t_queues[index]) == NULL))
-                    error("Task is NULL");
-                break;
+            while (queue_size(t_queues[index]) > 0) {
+                if ((t = (task *) queue_pop(t_queues[index]) != NULL))
+                    break;
             }
         }
     }
