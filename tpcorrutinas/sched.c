@@ -8,9 +8,29 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sched.h>
+#include <queue.h>
 
 
-void error(char *m)
+
+/********** Global variables **********/
+
+// Queues for task pointer storing
+queue __L0 = queue_init();
+queue __L1 = queue_init();
+queue __L2 = queue_init();
+queue __L3 = queue_init();
+queue __L4 = queue_init();
+queue t_queues[] = {__L0, __L1, __L2, __L3, __L4};
+
+// Default timer setting
+timer_t _sched_timer_ID;
+itimerspec _sched_time_setting = {0};
+
+
+
+/********** Function definitions **********/
+
+void __error(char *m)
 {
     exit((perror(m), 1));
 }
@@ -33,14 +53,14 @@ void create_routine(tareaF f, void *arg, task *new)
 {
     jmp_buf *ret = malloc(sizeof(jmp_buf));
     if (setjmp(ret) == 0)
-        start_routine(f,arg,new,ret);
+        __start_routine(f,arg,new,ret);
     else
         free(ret);
     return;
 }
 
 
-void start_routine(tareaF f, void *arg, task *new, jmp_buf *b)
+void __start_routine(tareaF f, void *arg, task *new, jmp_buf *b)
 {
     /* Solo para ser llamada por create_routine() */
     *new = {0}; /* Inicializo la estructura en 0 para no hacerlo por componente */
@@ -58,7 +78,6 @@ void start_routine(tareaF f, void *arg, task *new, jmp_buf *b)
         new->st = ZOMBIE;
         FINALIZE(task_pointer);
     }
-    while();
 }
 
 
@@ -77,59 +96,60 @@ fret stop_routine(task *t)
     return fr;
 }
 
+/*
+void *join_routine(task *t)
+{
+    if (t -> st == ZOMBIE)
+        return t->res;
+    else {
+        
+}
+*/
 
-void start_sched(task *t)
+
+void start_sched(void)
 {
     sigset_t block_these;
     if(!(sigfillset(&block_these)))
-        error("Error in signal config");
-    struct sigaction sa = {.sa_sigaction = sched,
+        __error("Error in signal config");
+    struct sigaction sa = {.sa_sigaction = _sched,
                           .sa_mask = block_these,
                           .sa_flags = SA_SIGINFO
                           };
     if (!(sigaction(TASK_YIELD, &sa, NULL)))
-        error("Error setting sigaction");
+        __error("Error setting sigaction");
     if (!(sigaction(TASK_NEW, &sa, NULL)))
-        error("Error setting sigaction");
+        __error("Error setting sigaction");
     struct sigevent se = {.sigev_notify = SIGEV_SIGNAL,
                          .sigev_signo = TASK_YIELD};
-    if (!(timer_create(CLOCK_REALTIME, &se, &timerID)))
-        error("Error creating timer");
-    siginfo_t data = {.si_value.sival_ptr = t};
+    if (!(timer_create(CLOCK_REALTIME, &se, &_sched_timer_ID)))
+        __error("Error creating timer");
     jmp_buf *jb = malloc(sizeof(jmp_buf));
     task maintask = {.buf = jb, st = READY};
-    timer_t timerID;
-    YIELD(&maintask);
-    sched(TASK_NEW, &data, &timerID);
+    siginfo_t data = {.si_value.sival_ptr = &maintask};
+    __sched(START_SCHED, &data, NULL);
     return;
 }
 
 
-void sched(int signum, siginfo_t *data, void* extra)
+void __sched(int signum, siginfo_t *data, void* extra)
 {
-    static queue L0 = queue_init();
-    static queue L1 = queue_init();
-    static queue L2 = queue_init();
-    static queue L3 = queue_init();
-    static queue L4 = queue_init();
-    static queue t_queues[] = {L0,L1,L2,L3,L4};
-
-    static struct sigevent se = {.sigev_signo = PROCESS_YIELD};
     static timer_t timerID = (timer_t) *extra;
     static struct itimerspec time_setting = {0};
     static int index = 0;
     static task *t;
 
 
-    t = (task *) data->si_value.sival_ptr;
+    t = (task *) data -> si_value.sival_ptr;
 
-    t->st = READY;
+    if (t->st == ACTIVE)
+        t -> st = READY;
     YIELD(t);
 
     if (signum == TASK_NEW) {
-        if (queue_size(L0) > 0) {
-            queue_insert(L0, t);
-            t = (task *) queue_pop(L0);
+        if (queue_size(__L0) > 0) {
+            queue_insert(__L0, t);
+            t = (task *) queue_pop(__L0);
         }
         index = 0;
     }
@@ -137,18 +157,23 @@ void sched(int signum, siginfo_t *data, void* extra)
     else if (signum == TASK_YIELD) {
         if (t->level < 4)
             t->level++;
-        queue_insert(t_queues[t->level], t);
+        queue_insert(_t_queues[t->level], t);
         for (index = 0; index < 5; index++) {
-            while (queue_size(t_queues[index]) > 0) {
-                if ((t = (task *) queue_pop(t_queues[index]) != NULL))
+            while (queue_size(_t_queues[index]) > 0) {
+                if ((t = (task *) queue_pop(_t_queues[index]) != NULL))
                     break;
             }
         }
     }
 
+    else if (signum == START_SCHED) {
+        t->st = ACTIVE;
+        return;
+    }
+
     t->st = ACTIVE;
     time_setting.it_value.tv_nsec = TIME_L(index);
-    if (!(timer_settime(timerID, 0, &time_setting, NULL)))
-        error("Error setting timer");
+    if (!(timer_settime(_sched_timer_ID, 0, &_sched_time_setting, NULL)))
+        __error("Error setting timer");
     ACTIVATE(t);
 }

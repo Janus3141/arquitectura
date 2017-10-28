@@ -2,8 +2,11 @@
 #define __SCHED_H
 
 #include <setjmp.h>
-#include <queue.c>
+#include <queue.h>
 
+
+
+/********** Structures and types definitions **********/
 
 typedef enum {ACTIVE, READY, BLOCKED, ZOMBIE} state;
 
@@ -12,9 +15,9 @@ typedef struct {
     queue qu;
 } lock;
 
-typedef struct _task {
+typedef struct {
     jmp_buf *buf;
-    short level : 4; //No lo estamos usando, borrar?
+    short level : 4;
     state st;
     void *res; // Resultado de la funcion
     void *mem_start;
@@ -26,9 +29,15 @@ typedef struct {
     short end : 1; // 1 si la funcion termino antes de llamar a stop
 } fret;
 
+typedef void *(*tareaF)(void *);
+
+
+
+/********** Macros definitions **********/
 
 #define TASK_NEW (SIGRTMIN)
 #define TASK_YIELD (SIGRTMIN+1)
+#define START_SCHED (SIGRTMIN+2)
 
 #define MS 1000
 #define TICK 5
@@ -38,25 +47,22 @@ typedef struct {
 #define TPILA 4096
 
 #define ACTIVATE(d) (longjmp(*(d->buf),1))
-#define YIELD(o) if(setjmp(*(o->buf))){return;}
-#define FINALIZE(tarea) (free(tarea->buf);tarea->buf=NULL) //Redef Nisman
+#define YIELD(o) ( ({ if(setjmp(*(o->buf))){return;} }) )
+#define FINALIZE(tarea) ( ({ free(tarea->buf);tarea->buf=NULL }) )
 
 
-typedef void *(*tareaF)(void *);
 
-void error(char *);
+/********** Sched functions prototypes **********/
 
 void take_stack(void);
 
-task *start_routine(void *(*f)(void *), void *arg);
+void create_routine(tareaF, void *, task *);
 
 fret stop_routine(task *);
 
-void kill_routine(task *)
+void *join_routine(task *);
 
 void start_sched(task *);
-
-void sched(int, siginfo_t *, void *);
 
 
 #endif //__SCHED_H
