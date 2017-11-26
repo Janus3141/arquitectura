@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <signal.h>
+#include <time.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -15,12 +16,12 @@
 /********** Global variables **********/
 
 // Queues for task pointer storing
-queue __L0 = queue_init();
-queue __L1 = queue_init();
-queue __L2 = queue_init();
-queue __L3 = queue_init();
-queue __L4 = queue_init();
-queue t_queues[] = {__L0, __L1, __L2, __L3, __L4};
+queue __q0 = queue_init();
+queue __q1 = queue_init();
+queue __q2 = queue_init();
+queue __q3 = queue_init();
+queue __q4 = queue_init();
+queue _t_queues[] = {__q0, __q1, __q2, __q3, __q4};
 
 // Default timer setting
 timer_t _sched_timer_ID;
@@ -30,9 +31,10 @@ itimerspec _sched_time_setting = {0};
 
 /********** Function definitions **********/
 
-void __error(char *m)
+void __error(char *m, size_t n)
 {
-    exit((perror(m), 1));
+	write(STDERR_FILENO, m, n);
+    _Exit(EXIT_FAILURE);
 }
 
 
@@ -96,38 +98,42 @@ fret stop_routine(task *t)
     return fr;
 }
 
-/*
-void *join_routine(task *t)
+
+void *join_routine(task *from, task *to)
 {
-    if (t -> st == ZOMBIE)
-        return t->res;
-    else {
-        
+    while (to -> st != ZOMBIE) {
+        _sched_time_setting = {0};
+        if (timer_settime(_sched_timer_ID, 0, &_sched_time_setting, NULL))
+            __error("Error disarming timer", 21);
+        union sigval task_pointer = {.sival_ptr = from};
+        sigqueue(getpid(), TASK_YIELD, task_pointer);
+    }
+    return to->res;
 }
-*/
 
 
 void start_sched(void)
 {
     sigset_t block_these;
-    if(!(sigfillset(&block_these)))
-        __error("Error in signal config");
+    if(sigfillset(&block_these))
+        __error("Error in signal config", 22);
     struct sigaction sa = {.sa_sigaction = _sched,
                           .sa_mask = block_these,
                           .sa_flags = SA_SIGINFO
                           };
-    if (!(sigaction(TASK_YIELD, &sa, NULL)))
-        __error("Error setting sigaction");
-    if (!(sigaction(TASK_NEW, &sa, NULL)))
-        __error("Error setting sigaction");
+    if (sigaction(TASK_YIELD, &sa, NULL))
+        __error("Error setting sigaction", 23);
+    if (sigaction(TASK_NEW, &sa, NULL))
+        __error("Error setting sigaction", 23);
     struct sigevent se = {.sigev_notify = SIGEV_SIGNAL,
                          .sigev_signo = TASK_YIELD};
-    if (!(timer_create(CLOCK_REALTIME, &se, &_sched_timer_ID)))
-        __error("Error creating timer");
+    if (timer_create(CLOCK_REALTIME, &se, &_sched_timer_ID))
+        __error("Error creating timer", 20);
     jmp_buf *jb = malloc(sizeof(jmp_buf));
-    task maintask = {.buf = jb, st = READY};
-    siginfo_t data = {.si_value.sival_ptr = &maintask};
-    __sched(START_SCHED, &data, NULL);
+    task *maintask = malloc(sizeof(task));
+    *maintask = {.buf = jb, st = READY};
+    union sigval task_pointer = {.sival_ptr = maintask};
+    sigqueue(getpid(), START_SCHED, task_pointer);
     return;
 }
 
@@ -147,8 +153,8 @@ void __sched(int signum, siginfo_t *data, void* extra)
     YIELD(t);
 
     if (signum == TASK_NEW) {
-        if (queue_size(__L0) > 0) {
-            queue_insert(__L0, t);
+        if (queue_size(__q0) > 0) {
+            queue_insert(__q0, t);
             t = (task *) queue_pop(__L0);
         }
         index = 0;
@@ -172,8 +178,8 @@ void __sched(int signum, siginfo_t *data, void* extra)
     }
 
     t->st = ACTIVE;
-    time_setting.it_value.tv_nsec = TIME_L(index);
-    if (!(timer_settime(_sched_timer_ID, 0, &_sched_time_setting, NULL)))
-        __error("Error setting timer");
+    _sched_time_setting.it_value.tv_nsec = TIME_L(index);
+    if (timer_settime(_sched_timer_ID, 0, &_sched_time_setting, NULL))
+        __error("Error setting timer", 19);
     ACTIVATE(t);
 }

@@ -10,10 +10,12 @@
 
 typedef enum {ACTIVE, READY, BLOCKED, ZOMBIE} state;
 
+
 typedef struct {
     int key;
     queue qu;
 } lock;
+
 
 typedef struct {
     jmp_buf *buf;

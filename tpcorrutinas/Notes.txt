@@ -1,0 +1,31 @@
+http://man7.org/linux/man-pages/man7/signal-safety.7.html
+
+
+
+
+-----------------------------------------------------------------------------------------------------
+
+__sched es un handler asíncrono, por lo cual en su definición no deberían usarse funciones
+    que no son seguras para este (e.g., funciones no reentrantes). Existe una lista de
+    funciones de las librerías de C que se asegura son seguras. Se pudo evitar el uso
+    de aquellas que no lo son, excepto por el siguiente:
+
+Problema: Uso de malloc en implementación de queues, que van a ser usadas por el scheduler.
+    Malloc es una función no reentrante, por lo cual su uso en un handler asíncrono como __sched
+    puede generar un mal comportamiento o error del programa.
+Soluciones:
+    - Prohibir el uso de malloc en las funciones que vayan utilizarse junto con el scheduler.
+      De esta manera se puede asegurar que no habrá problemas al llamar a malloc dentro de __sched
+      ya que no se puede interrumpir la ejecución de esta función (excepto claro por las señales
+      Stop y Kill), y por lo tanto malloc puede ejecutarse completa y seguramente.
+      Desventajas: obvias, se pierde la capacidad de reservar espacio de heap *(a menos que se pueda
+      implementar un simil-malloc: http://www.inf.udec.cl/~leo/Malloc_tutorial.pdf).
+    - Dar la posibilidad a las corrutinas de evitar la expropiación del procesador por el scheduler,
+      por medio de alguna función que evite la expiración del timer o la llegada de la señal de Yield,
+      de esta manera malloc puede ser llamada de forma segura dentro de la rutina.
+      Desventajas: Se pierde el control que logra el scheduler sobre las corrutinas, ya que la
+      función que evitó la expropiación debe entregar luego el procesador, de lo contrario se
+      pierde la multitarea.
+    - Evitar el uso de malloc en la implementación de queues, haciendo una reserva de un número cte.
+      de elementos en cada cola (se usará malloc sólo una o varias veces al iniciar el scheduler).
+      Desventajas: Se limita el número de rutinas que pueden compartir el procesador.

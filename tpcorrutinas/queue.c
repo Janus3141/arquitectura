@@ -2,10 +2,18 @@
 #include "queue.h"
 
 
+
+void __q_error(constant char *m, size_t size)
+{
+    write(STDERR_FILENO, m, size);
+    _Exit(EXIT_FAILURE);
+}
+
+
 queue queue_init(void)
 {
     queue q = malloc(sizeof(struct _q));
-    if (q == NULL) error("No space to allocate.");
+    if (q == NULL) __q_error("No space to allocate", 20);
     q->front = NULL;
     q->back = NULL;
     q->size = 0;
@@ -36,7 +44,7 @@ void queue_insert(queue q, void *elem)
 {
     // Se termina el programa en caso de un fallo en malloc
     q_elem *new = malloc(sizeof(q_elem));
-    if (new == NULL) error("No space to allocate.");
+    if (new == NULL) __q_error("No space to allocate", 20);
     new->data = elem;
     new->next = NULL;
     new->prev = NULL;
