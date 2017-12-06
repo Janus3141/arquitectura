@@ -14,12 +14,12 @@ typedef struct _q_elem {
 } q_elem;
 
 
-typedef struct _q {
+typedef struct {
     // Estructura para contener el inicio y final de la cola
     q_elem *front;
     q_elem *back;
     int size;
-} *queue;
+} queue;
 
 
 queue queue_init(void);
@@ -27,8 +27,6 @@ queue queue_init(void);
 
 void queue_destroy(queue);
 // Destruye la cola y todo su contenido
-
-int queue_size(queue);
 
 void queue_insert(queue, void *);
 // Inserta un elemento en la cola, se guarda como su 'back'

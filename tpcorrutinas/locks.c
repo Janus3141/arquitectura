@@ -1,13 +1,4 @@
 
-#include "queue.h"
-
-
-typedef struct {
-    queue qu;
-    short key : 1;
-} lock;
-
-
 
 lock *lock_init(void)
 {

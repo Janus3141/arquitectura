@@ -1,5 +1,5 @@
 
-/* Scheduler functions implementations */
+/* Implementaciones de funciones del scheduler */
 
 // TO DO
 /* Comentario sobre codigo */
@@ -15,7 +15,7 @@
 
 
 
-/********** Global variables **********/
+/********** Variables globales **********/
 
 // Default timer setting
 timer_t _sched_timer_ID;
@@ -23,10 +23,10 @@ itimerspec _sched_time_setting = {0};
 itimerspec _sched_stop_timer = {0};
 
 // Maintain current task executed
-Task *_t;
+Task *_current_task;
 
 
-/********** Function definitions **********/
+/********** Definiciones de funciones **********/
 
 void __error(char *m, size_t n)
 {
@@ -50,6 +50,9 @@ void take_stack(void)
 
 void create_routine(TaskFunc f, void *arg, Task *new)
 {
+    /* Primero se desarma el timer para ejecutar malloc de forma segura */
+    if (timer_settime(_sched_timer_ID, 0, &_sched_stop_timer, NULL))
+            __error("Error disarming timer", 21);
     jmp_buf *ret = malloc(sizeof(jmp_buf));
     if (setjmp(ret) == 0)
         __start_routine(f,arg,new,ret);
@@ -68,43 +71,29 @@ void __start_routine(TaskFunc f, void *arg, Task *new, jmp_buf *b)
     new->st = READY;
     union sigval task_pointer = {.sival_ptr = new};
     if (setjmp(*jb) == 0) {
-        if (timer_settime(_sched_timer_ID, 0, &_sched_stop_timer, NULL))
-            __error("Error disarming timer", 21);
-        sigqueue(getpid(), TASK_NEW, task_pointer);
+        sigqueue(getpid(), _TASK_NEW, task_pointer);
         longjmp(*b,1);
     }
     else {
         new->mem_start = take_stack(); // Tomar stack antes para guardar task_pointer
         new->res = f(arg);
         new->st = ZOMBIE;
-        _finalize_routine(new);
+        stop_routine(new);
     }
 }
 
 
-Fret stop_routine(Task *tk)
+void stop_routine(Task *r)
 {
-    Fret fr;
-    if (tk->st == ZOMBIE) {
-        fr.result = tk->res;
-        fr.end = 1;
-    }
-    else {
-        _finalize_routine(tk);
-        fr.result = NULL;
-        fr.end = 0;
-    }
-    return fr;
-}
-
-
-void _finalize_routine(Task *r)
-{
+    /* Si se quiere saber si la funcion termino antes de llamar a stop,
+       verificar state */
     if (timer_settime(_sched_timer_ID, 0, &_sched_stop_timer, NULL))
         __error("Error disarming timer", 21);
+    if (r->st != ZOMBIE)
+        r->res = NULL;
     free(r->buf);
-    union sigval task_pointer = {.sival_ptr = r};
-    sigqueue(getpid(), TASK_END, task_pointer);
+    // Liberar memoria
+    sigqueue(getpid(), _TASK_END, union sigval {0}); // Como mandar union nula?
 }
 
 
@@ -113,30 +102,22 @@ void *join_routine(Task *to)
     while (to -> st != ZOMBIE) {
         if (timer_settime(_sched_timer_ID, 0, &_sched_stop_timer, NULL))
             __error("Error disarming timer", 21);
-        union sigval task_pointer = {.sival_ptr = _t};
-        sigqueue(getpid(), TASK_YIELD, task_pointer);
+        union sigval task_pointer = {.sival_ptr = _current_task};
+        sigqueue(getpid(), _TASK_YIELD, task_pointer);
     }
     return to->res;
 }
 
-// Cambiar estas dos para hacerlas mas especificas
+
 void block_routine(Task *target)
 {
-    if (timer_settime(_sched_timer_ID, 0, &_sched_stop_timer, NULL))
-            __error("Error disarming timer", 21);
-    target -> st = BLOCKED;
-    while (target -> st == BLOCKED) {
-        if (timer_settime(_sched_timer_ID, 0, &_sched_stop_timer, NULL))
-            __error("Error disarming timer", 21);
-        union sigval task_pointer = {.sival_ptr = _t};
-        sigqueue(getpid(), TASK_YIELD, task_pointer);
-    }
+
 }
 
 
 void unblock_routine(Task *target)
 {
-    target -> st = READY;
+
 }
 
 
@@ -149,84 +130,105 @@ void start_sched(Task *maintask)
                           .sa_mask = block_these,
                           .sa_flags = SA_SIGINFO
                           };
-    if (sigaction(TASK_YIELD, &sa, NULL))
+    if (sigaction(_TASK_YIELD, &sa, NULL))
         __error("Error setting sigaction", 23);
-    if (sigaction(TASK_NEW, &sa, NULL))
+    if (sigaction(_TASK_NEW, &sa, NULL))
         __error("Error setting sigaction", 23);
     struct sigevent se = {.sigev_notify = SIGEV_SIGNAL,
-                         .sigev_signo = TASK_YIELD};
+                         .sigev_signo = _TASK_YIELD};
     if (timer_create(CLOCK_REALTIME, &se, &_sched_timer_ID))
         __error("Error creating timer", 20);
     jmp_buf *jb = malloc(sizeof(jmp_buf));
-    *maintask = {.buf = jb, st = ACTIVE};
+    *maintask = {.buf = jb};
     union sigval task_pointer = {.sival_ptr = maintask};
-    _t = maintask;
-    _sched_time_setting.it_value.tv_nsec = TIME_L(0);
-    if (timer_settime(_sched_timer_ID, 0, &_sched_time_setting, NULL))
-        __error("Error setting timer", 19);
+    _current_task = maintask;
+    sigqueue(getpid(),_TASK_NEW,task_pointer);
     return;
 }
 
 // Introducir manejo de task con state Blocked
-void __sched(int signum, siginfo_t *data, void* extra)
+void _sched(int signum, siginfo_t *data, void* extra)
 {
     static int index = 0;
 
-    static Task *l0back = _t, *l0front = _t;
-    static Task *l1back, *l1front;
-    static Task *l2back, *l2front;
-    static Task *l3back, *l3front;
-    static Task *l4back, *l4front;
-    static Task *back[] = {l0back, l1back, l2back, l3back, l4back};
-    static Task *front[] = {l0front, l1front, l2front, l3front, l4front};
+    static Task *back[];
+    static Task *front[];
 
-    if (signum != TASK_END) {
+
+    if (signum != _TASK_END && signum != _START_SCHED) {
         /* Guardar tarea anterior */
-        if (_t -> level < 4)
-            _t -> level++;
+        if (_current_task -> level < 4)
+            _current_task -> level++;
 
-        if (back[_t->level] != NULL)
-            _next(back[_t->level]) = _t;
+        if (back[_current_task -> level] != NULL) {
+            _next(back[_current_task -> level]) = _current_task;
+            _prev(_current_task) = back[_current_task -> level];
+            _next(_current_task) = NULL;
+            back[_current_task -> level] = _current_task;
+        }
         else {
-            back[_t->level] = _t;
-            front[_t->level] = _t;
+            back[_current_task -> level] = _current_task;
+            front[_current_task -> level] = _current_task;
+            _next(_current_task) = NULL;
+            _prev(_current_task) = NULL;
         }
 
-        if (_t->st == ACTIVE)
-                _t -> st = READY;
-        YIELD(_t);
+        if (_current_task -> st == ACTIVE)
+            _current_task -> st = READY;
+        YIELD(_current_task);
+    }
+
+    if (signum == _TASK_BLOCK) {
+        _current_task = (Task *) data -> si_value.sival_ptr;
+        if (_prev(_current_task) != NULL)
+            _next(_prev(_current_task)) = _next(_current_task);
+        else if (front(_current_task -> level) == _current_task)
+            front(_current_task) -> level = _next(_current_task);
+        _prev(_current_task) = NULL;
+        _next(_current_task) = NULL;
+    }
+
+    else if (signum == _TASK_UNBLOCK) {
+        _current_task = (Task *) data -> si_value.sival_ptr;
+        _current_task -> state = READY;
     }
 
     /* Desencolar tarea lista para ejecutar */
-    if (signum == TASK_NEW) {
-        _t = (Task *) data -> si_value.sival_ptr;
-        if (l0back != NULL) {
-            _next(l0back) = _t;
-            l0back = _t;
-            _t = l0front;
-            l0front = _next(_t);
+    if (signum == _TASK_NEW || signum == _TASK_UNBLOCK) {
+        _current_task = (Task *) data -> si_value.sival_ptr;
+        _current_task -> level = 0;
+        if (back[0] != NULL) {
+                /* Si la cola no esta vacia, encolo la nueva tarea,
+                   si esta vacia sigo con la nueva tarea como current */
+                _next(back[0]) = _current_task;
+                _prev(_current_task) = back[0];
+                _next(_current_task) = NULL;
+                back[0] = _current_task;
+                _current_task = front[0];
+                front[0] = _next(_current_task);
+                _prev(front[0]) = NULL;
         }
         index = 0;
     }
 
-    else if (signum == TASK_YIELD) {
+    else if (signum == _TASK_YIELD || signum == _TASK_END || signum == _TASK_BLOCK) {
         for (index = 0; index < 5; index++) {
             if (front[index] != NULL) {
-                _t = front[index];
-                front[index] = _next(_t);
+                _current_task = front[index];
+                front[index] = _next(_current_task);
                 if (front[index] == NULL && back[index] != NULL)
                     /* Solo ocurre si habia un solo elemento */
                     back[index] = NULL;
+                else
+                    _prev(front[index]) = NULL;
                 break;
             }
         }
     }
 
-    _t->st = ACTIVE;
+    _current_task->st = ACTIVE;
     _sched_time_setting.it_value.tv_nsec = TIME_L(index);
     if (timer_settime(_sched_timer_ID, 0, &_sched_time_setting, NULL))
         __error("Error setting timer", 19);
-    ACTIVATE(_t);
+    ACTIVATE(_current_task);
 }
-
-

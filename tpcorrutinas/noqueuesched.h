@@ -5,15 +5,10 @@
 
 
 
-/********** Structures and types definitions **********/
+/********** Definiciones de tipos **********/
 
+/**** Tipos para tareas ****/
 typedef enum {ACTIVE, READY, BLOCKED, ZOMBIE} _state;
-
-
-typedef struct {
-    int key;
-    queue qu;
-} Lock;
 
 
 typedef struct _Task {
@@ -24,18 +19,14 @@ typedef struct _Task {
     void *mem_start;
     short stack_pos;
     struct _Task *next;
+    struct _Task *prev;
 } Task;
-
-
-typedef struct {
-    void *result;
-    short end : 1; // 1 si la funcion termino antes de llamar a stop
-} Fret;
 
 
 typedef void *(*TaskFunc)(void *);
 
 
+/**** Tipos para memoria ****/
 typedef enum {FREE, IN_USE} _mem_state;
 
 
@@ -45,14 +36,30 @@ typedef struct {
 } _mem_info;
 
 
+/**** Tipos para lock ****/
+typedef struct {
+    int task_key;
+    Task *t;
+} _T_lock_pair;
 
-/********** Macros definitions **********/
 
-#define _next(t) (t->next)
+typedef struct {
+    int key;
+    _T_lock_pair *queue;
+    unsigned char q_size;
+} Lock;
 
-#define TASK_NEW (SIGRTMIN)
-#define TASK_END (SIGRTMIN+1)
-#define TASK_YIELD (SIGRTMIN+2)
+
+
+/********** Definiciones de macros **********/
+
+#define _next(t) ((t)->next)
+#define _prev(t) ((t)->prev)
+#define _lvl(t) ((t)->level)
+
+#define _TASK_END (SIGRTMIN)
+#define _TASK_NEW (SIGRTMIN+1)
+#define _TASK_YIELD (SIGRTMIN+2)
 
 #define MS 1000
 #define TICK 5
@@ -61,19 +68,19 @@ typedef struct {
 
 #define _ROUTINE_STACK_SIZE 500000 // 500 kB
 
-#define ACTIVATE(d) (longjmp(*(d->buf),1))
-#define YIELD(o) ( ({ if(setjmp(*(o->buf))){return;} }) )
+#define ACTIVATE(d) (longjmp(*((d)->buf),1))
+#define YIELD(o) ( ({ if(setjmp(*((o)->buf))){return;} }) )
 // #define FINALIZE(tarea) ( ({ _sched_time_setting={0};  }) )
 
 
 
-/********** Sched functions prototypes **********/
+/********** Prototipos **********/
 
 void take_stack(void);
 
 void create_routine(TaskFunc, void *, Task *);
 
-Fret stop_routine(Task *);
+void stop_routine(Task *);
 
 void *join_routine(Task *,Task *);
 
