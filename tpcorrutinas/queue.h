@@ -11,32 +11,36 @@ typedef struct _q_elem {
     void *data;
     struct _q_elem *next;
     struct _q_elem *prev;
+    char lvl;
 } q_elem;
 
 
 typedef struct {
     // Estructura para contener el inicio y final de la cola
     q_elem *front;
-    q_elem *back;
-    int size;
-} queue;
+    q_elem *backs;
+    int *size;
+    char maxlevel;
+} multi_queue;
 
 
-queue queue_init(void);
-// Devuelve la cola vacia
+multi_queue queue_create(char);
+/* Devuelve la cola vacia. La estructura se debe guardar en
+   el programa llamador */
 
-void queue_destroy(queue);
-// Destruye la cola y todo su contenido
+void queue_destroy(multi_queue *);
+/* Destruye la cola y todo su contenido */
 
-void queue_insert(queue, void *);
-// Inserta un elemento en la cola, se guarda como su 'back'
+void queue_insert(multi_queue *, q_elem *);
+/* Reinserta un q_elem previamente quitado de la cola */
 
-void *queue_pop(queue);
-/*
-* Devuelve el dato guardado en el front de la cola.
-* Si la cola esta vacia, se devuelve NULL.
-* Notar que no se diferencia entre esto y haber guardado NULL
-* en la cola (lo cual pudo haber sido un error).
-*/ 
+void queue_new_node(multi_queue *, void *);
+/* Inserta un nuevo nodo en la cola 0 */
+
+q_elem *queue_pop(queue);
+/* Devuelve el primer dato guardado en la cola.
+   Si la cola esta vacia, se devuelve NULL */ 
+
 
 #endif // __QUEUE_H
+
