@@ -18,7 +18,7 @@ typedef struct _q_elem {
 typedef struct {
     // Estructura para contener el inicio y final de la cola
     q_elem *front;
-    q_elem *backs;
+    q_elem **backs;
     int *size;
     char maxlevel;
 } multi_queue;
@@ -37,7 +37,7 @@ void queue_insert(multi_queue *, q_elem *);
 void queue_new_node(multi_queue *, void *);
 /* Inserta un nuevo nodo en la cola 0 */
 
-q_elem *queue_pop(queue);
+q_elem *queue_pop(multi_queue *);
 /* Devuelve el primer dato guardado en la cola.
    Si la cola esta vacia, se devuelve NULL */ 
 

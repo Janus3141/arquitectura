@@ -1,9 +1,11 @@
 
 #include <malloc.h>
 #include "queue.h"
+#include <stdlib.h>
+#include <unistd.h>
 
 
-void __q_error(constant char *m, size_t size)
+void __q_error(char *m, size_t size)
 {
     write(STDERR_FILENO, m, size);
     _Exit(EXIT_FAILURE);
@@ -12,7 +14,7 @@ void __q_error(constant char *m, size_t size)
 
 multi_queue queue_create(char n)
 {
-    q_elem *backs = calloc(n, sizeof(void *));
+    q_elem **backs = calloc(n, sizeof(q_elem *));
     if (backs == NULL) __q_error("No space to allocate", 20);
     char *sizes = calloc(n, sizeof(char));
     if (sizes == NULL) __q_error("No space to allocate", 20);
@@ -91,6 +93,7 @@ void queue_new_node(multi_queue *q, void *elem)
         (q->backs)[0] = new;
         q -> front = new;
     }
+    (q->size)[0]++;
     return;
 }
 
