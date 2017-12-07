@@ -62,6 +62,7 @@ void queue_insert(multi_queue *q, q_elem *elem)
                     elem -> next = (q->backs)[i] -> next;
                     elem -> prev = (q->backs)[i];
                     (q->backs)[i] -> next = elem;
+                    break;
                 }
             }
         }
@@ -69,6 +70,7 @@ void queue_insert(multi_queue *q, q_elem *elem)
     else {
         elem -> next = (q->backs)[elem->lvl] -> next;
         elem -> prev = (q->backs)[elem->lvl];
+        (q->backs)[elem->lvl] -> next = elem;
         (q->backs)[elem->lvl] = elem;
     }
     (q->size)[elem->lvl]++;
@@ -103,7 +105,7 @@ q_elem *queue_pop(multi_queue *q)
     q_elem *poped = q->front;
     if (poped != NULL) {
         (q->size)[poped->lvl]--;
-        q -> front = (q->front) -> next;
+        q -> front = poped -> next;
         poped -> prev = NULL;
         poped -> next = NULL;
     }
