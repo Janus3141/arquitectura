@@ -1,90 +1,46 @@
-#ifndef __SCHED_H
-#define __SCHED_H
 
-#include <setjmp.h>
-
+#ifndef __QUEUE_H
+#define __QUEUE_H
 
 
-/********** Definiciones de tipos **********/
-
-/**** Tipos para tareas ****/
-typedef enum {ACTIVE, READY, BLOCKED, ZOMBIE} _state;
+#include <malloc.h>
 
 
-typedef struct _Task {
-    jmp_buf *buf;
-    short level : 3;
-    _state st;
-    void *res; // Resultado de la funcion
-    void *mem_start;
-    short stack_pos;
-    struct _Task *next;
-    struct _Task *prev;
-} Task;
-
-
-typedef void *(*TaskFunc)(void *);
-
-
-/**** Tipos para memoria ****/
-typedef enum {FREE, IN_USE} _mem_state;
+typedef struct _q_elem {
+    // Estructura para cada elemento de la cola
+    void *data;
+    struct _q_elem *next;
+    struct _q_elem *prev;
+    char lvl;
+} q_elem;
 
 
 typedef struct {
-    short arr_pos;
-    void *mem_pos;
-} _mem_info;
+    // Estructura para contener el inicio y final de la cola
+    q_elem *front;
+    q_elem **backs;
+    int *size;
+    char maxlevel;
+} multi_queue;
 
 
-/**** Tipos para lock ****/
-typedef struct {
-    int task_key;
-    Task *t;
-} _T_lock_pair;
+multi_queue queue_create(char);
+/* Devuelve la cola vacia. La estructura se debe guardar en
+   el programa llamador */
+
+void queue_destroy(multi_queue *);
+/* Destruye la cola y todo su contenido */
+
+void queue_insert(multi_queue *, q_elem *);
+/* Reinserta un q_elem previamente quitado de la cola */
+
+void queue_new_node(multi_queue *, void *);
+/* Inserta un nuevo nodo en la cola 0 */
+
+q_elem *queue_pop(multi_queue *);
+/* Devuelve el primer dato guardado en la cola.
+   Si la cola esta vacia, se devuelve NULL */ 
 
 
-typedef struct {
-    int key;
-    _T_lock_pair *queue;
-    unsigned char q_size;
-} Lock;
+#endif // __QUEUE_H
 
-
-
-/********** Definiciones de macros **********/
-
-#define _next(t) ((t)->next)
-#define _prev(t) ((t)->prev)
-#define _lvl(t) ((t)->level)
-
-#define _TASK_END (SIGRTMIN)
-#define _TASK_NEW (SIGRTMIN+1)
-#define _TASK_YIELD (SIGRTMIN+2)
-
-#define MS 1000
-#define TICK 5
-#define QUANTUM 4
-#define TIME_L(x) (QUANTUM*TICK*MS*(1<<(x)))
-
-#define _ROUTINE_STACK_SIZE 500000 // 500 kB
-
-#define ACTIVATE(d) (longjmp(*((d)->buf),1))
-#define YIELD(o) ( ({ if(setjmp(*((o)->buf))){return;} }) )
-// #define FINALIZE(tarea) ( ({ _sched_time_setting={0};  }) )
-
-
-
-/********** Prototipos **********/
-
-void take_stack(void);
-
-void create_routine(TaskFunc, void *, Task *);
-
-void stop_routine(Task *);
-
-void *join_routine(Task *,Task *);
-
-void start_sched(Task *);
-
-
-#endif //__SCHED_H
