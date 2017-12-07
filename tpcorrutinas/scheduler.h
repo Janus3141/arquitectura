@@ -13,13 +13,11 @@ typedef enum {ACTIVE, READY, BLOCKED, ZOMBIE} _state;
 
 typedef struct _Task {
     jmp_buf *buf;
-    short level : 3;
     _state st;
     void *res; // Resultado de la funcion
+    char queued:1; // 1 si esta en cola de tareas
     void *mem_start;
     short stack_pos;
-    struct _Task *next;
-    struct _Task *prev;
 } Task;
 
 
@@ -53,13 +51,11 @@ typedef struct {
 
 /********** Definiciones de macros **********/
 
-#define _next(t) ((t)->next)
-#define _prev(t) ((t)->prev)
-#define _lvl(t) ((t)->level)
+#define QUEUE_NUMBER 5 // Cantidad de colas que utilizara el scheduler
 
-#define _TASK_END (SIGRTMIN)
-#define _TASK_NEW (SIGRTMIN+1)
-#define _TASK_YIELD (SIGRTMIN+2)
+#define SIG_TASK_END (SIGRTMIN)
+#define SIG_TASK_NEW (SIGRTMIN+1)
+#define SIG_TASK_YIELD (SIGRTMIN+2)
 
 #define MS 1000
 #define TICK 5
