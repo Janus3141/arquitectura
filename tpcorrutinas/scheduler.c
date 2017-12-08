@@ -34,19 +34,6 @@ void __error(char *m, size_t n)
     _Exit(EXIT_FAILURE);
 }
 
-/*   REDO
-void take_stack(void)
-{
-    static int cuantas = 1;
-    static int prof;
-    prof = TPILA*cuantas;
-    char rsp_sub[20];
-    sprintf(rsp_sub, "subq $%d, %rsp", prof);
-    asm(rsp_sub);
-    cuantas++;
-    return;
-}
-*/
 
 void create_routine(TaskFunc f, void *arg, Task *new)
 {

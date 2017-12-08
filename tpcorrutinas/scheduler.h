@@ -57,12 +57,13 @@ typedef struct {
 #define SIG_TASK_NEW (SIGRTMIN+1)
 #define SIG_TASK_YIELD (SIGRTMIN+2)
 
-#define MS 1000
+#define MS 1000 /* 1 ms = 1000 ns */
 #define TICK 5
 #define QUANTUM 4
 #define TIME_L(x) (QUANTUM*TICK*MS*(1<<(x)))
 
-#define _ROUTINE_STACK_SIZE 500000 // 500 kB
+#define MEM_TASK_SIZE 1024 /* 1KB por Task */
+#define MEM_TASKS_PER_SEG 10 /* 10 task por cada segmento de stack */
 
 #define ACTIVATE(d) (longjmp(*((d)->buf),1))
 #define YIELD(o) ( ({ if(setjmp(*((o)->buf))){return;} }) )
@@ -84,3 +85,4 @@ void start_sched(Task *);
 
 
 #endif //__SCHED_H
+
