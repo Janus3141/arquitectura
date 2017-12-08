@@ -16,22 +16,11 @@ typedef struct _Task {
     _state st;
     void *res; // Resultado de la funcion
     char queued:1; // 1 si esta en cola de tareas
-    void *mem_start;
-    short stack_pos;
+    void *mem_position;
 } Task;
 
 
 typedef void *(*TaskFunc)(void *);
-
-
-/**** Tipos para memoria ****/
-typedef enum {FREE, IN_USE} _mem_state;
-
-
-typedef struct {
-    short arr_pos;
-    void *mem_pos;
-} _mem_info;
 
 
 /**** Tipos para lock ****/
@@ -65,6 +54,11 @@ typedef struct {
 #define MEM_TASK_SIZE 1024 /* 1KB por Task */
 #define MEM_TASKS_PER_SEG 10 /* 10 task por cada segmento de stack */
 
+/* void *take_stack(void); */
+#define take_stack() memory_manager(NULL,1)
+/* void release_stack(Task *); */
+#define release_stack(t) memory_manager((t)->mem_position,0)
+
 #define ACTIVATE(d) (longjmp(*((d)->buf),1))
 #define YIELD(o) ( ({ if(setjmp(*((o)->buf))){return;} }) )
 // #define FINALIZE(tarea) ( ({ _sched_time_setting={0};  }) )
@@ -72,8 +66,6 @@ typedef struct {
 
 
 /********** Prototipos **********/
-
-void take_stack(void);
 
 void create_routine(TaskFunc, void *, Task *);
 

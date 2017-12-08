@@ -41,7 +41,7 @@ void create_routine(TaskFunc f, void *arg, Task *new)
     if (timer_settime(sched_timer_ID, 0, &_sched_stop_timer, NULL))
             __error("Error disarming timer", 21);
     jmp_buf *ret = malloc(sizeof(jmp_buf));
-    if (setjmp(ret) == 0)
+    if (setjmp(*ret) == 0)
         _start_routine(f,arg,new,ret);
     else
         free(ret);
