@@ -21,23 +21,22 @@ typedef struct {
     q_elem **backs;
     int *size;
     char maxlevel;
-} multi_queue;
+} pqueue;
 
 
-multi_queue queue_create(char);
-/* Devuelve la cola vacia. La estructura se debe guardar en
-   el programa llamador */
+pqueue queue_create(char);
+/* Devuelve la cola vacia */
 
-void queue_destroy(multi_queue *);
+void queue_destroy(pqueue *);
 /* Destruye la cola y todo su contenido */
 
-void queue_insert(multi_queue *, q_elem *);
+void queue_insert(pqueue *, q_elem *);
 /* Reinserta un q_elem previamente quitado de la cola */
 
-void queue_new_node(multi_queue *, void *);
+void queue_new_node(pqueue *, void *);
 /* Inserta un nuevo nodo en la cola 0 */
 
-q_elem *queue_pop(multi_queue *);
+q_elem *queue_pop(pqueue *);
 /* Devuelve el primer dato guardado en la cola.
    Si la cola esta vacia, se devuelve NULL */ 
 

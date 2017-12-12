@@ -1,6 +1,6 @@
 
 #include <malloc.h>
-#include "queue.h"
+#include "pqueue.h"
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -12,13 +12,13 @@ void __q_error(char *m, size_t size)
 }
 
 
-multi_queue queue_create(char n)
+pqueue queue_create(char n)
 {
     q_elem **backs = calloc(n, sizeof(q_elem *));
     if (backs == NULL) __q_error("No space to allocate", 20);
-    char *sizes = calloc(n, sizeof(char));
+    int *sizes = calloc(n, sizeof(char));
     if (sizes == NULL) __q_error("No space to allocate", 20);
-    multi_queue mq = {.front = NULL,
+    pqueue mq = {.front = NULL,
                       .backs = backs,
                       .size = sizes,
                       .maxlevel = n-1};
@@ -26,7 +26,7 @@ multi_queue queue_create(char n)
 }
 
 
-void queue_destroy(multi_queue *q)
+void queue_destroy(pqueue *q)
 {
     // No se provee proteccion contra un fallo de free
     if (q -> front != NULL) {
@@ -42,7 +42,7 @@ void queue_destroy(multi_queue *q)
 }
 
 
-void queue_insert(multi_queue *q, q_elem *elem)
+void queue_insert(pqueue *q, q_elem *elem)
 {
     // El caller debe ocuparse del nivel en que se inserta elem
     if ((q->size)[elem->lvl] == 0) {
@@ -78,7 +78,7 @@ void queue_insert(multi_queue *q, q_elem *elem)
 }
 
 
-void queue_new_node(multi_queue *q, void *elem)
+void queue_new_node(pqueue *q, void *elem)
 {
     q_elem *new = malloc(sizeof(q_elem));
     new -> data = elem;
@@ -100,7 +100,7 @@ void queue_new_node(multi_queue *q, void *elem)
 }
 
 
-q_elem *queue_pop(multi_queue *q)
+q_elem *queue_pop(pqueue *q)
 {
     q_elem *poped = q->front;
     if (poped != NULL) {

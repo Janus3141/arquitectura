@@ -4,26 +4,34 @@
 // TO DO
 /* Comentario sobre codigo */
 
-#include <stdio.h>
 #include <signal.h>
 #include <time.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <noqueuesched.h>
 #include <setjmp.h>
+#include "scheduler.h"
+#include "pqueue.h"
+#include "mm.h"
 
+#define debug() (write(STDOUT_FILENO, "debug\n", 6))
 
 
 /********** Variables globales **********/
 
-// Default timer setting
+// Setting por defecto de timers
 timer_t sched_timer_ID;
-itimerspec sched_time_setting = {0};
-itimerspec _sched_stop_timer = {0};
+struct itimerspec sched_time_setting = {0};
+struct itimerspec sched_stop_timer = {0};
 
-// Maintain current task executed
-q_elem *_task_current = NULL;
+// Puntero para conocer tarea en ejecucion
+q_elem *qelem_current = NULL;
+
+// Puntero a direccion de stack considerada inicio del sched
+void *initial_rsp;
+
+// Puntero a las colas de tareas
+pqueue *queues;
 
 
 /********** Definiciones de funciones **********/
@@ -38,33 +46,38 @@ void __error(char *m, size_t n)
 void create_routine(TaskFunc f, void *arg, Task *new)
 {
     /* Primero se desarma el timer para ejecutar malloc de forma segura */
-    if (timer_settime(sched_timer_ID, 0, &_sched_stop_timer, NULL))
+    if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, NULL))
             __error("Error disarming timer", 21);
-    jmp_buf *ret = malloc(sizeof(jmp_buf));
-    if (setjmp(*ret) == 0)
-        _start_routine(f,arg,new,ret);
-    else
-        free(ret);
+    jmp_buf creator_buf;
+    jmp_buf *jb = malloc(sizeof(jmp_buf));
+    new->buf = jb;
+    new->st = READY;
+    new->arg = arg;
+    new->fun = f;
+    new->mem_position = take_stack();
+    if (setjmp(creator_buf) == 0) {
+        asm("movq %0, %%rdi\n"
+            "movq %1, %%rsi\n"
+            "movq %2, %%rsp\n"
+            "call _start_routine"
+            :
+            : "m" (new), "rm" (&creator_buf), "m" (new->mem_position));
+    }
     return;
 }
 
 
-void _start_routine(TaskFunc f, void *arg, Task *new, jmp_buf *b)
+void _start_routine(Task *new, jmp_buf *b)
 {
     /* Solo para ser llamada por create_routine() */
-    *new = {0}; /* Inicializo la estructura en 0 para no hacerlo por componente */
-    jmp_buf *jb = malloc(sizeof(jmp_buf));
-    new->buf = jb;
-    new->st = READY;
     union sigval task_pointer = {.sival_ptr = new};
-    if (setjmp(*jb) == 0) {
+    if (setjmp(*(new->buf)) == 0) {
         sigqueue(getpid(), SIG_TASK_NEW, task_pointer);
         longjmp(*b,1);
     }
     else {
-        new->mem_start = take_stack(); // Tomar stack antes para guardar task_pointer
-        new->res = f(arg);
-        new->st = ZOMBIE;
+        new -> res = (new->fun)(new->arg);
+        new -> st = ZOMBIE;
         stop_routine(new);
     }
 }
@@ -74,20 +87,20 @@ void stop_routine(Task *r)
 {
     /* Si se quiere saber si la funcion termino antes de llamar a stop,
        verificar state */
-    if (timer_settime(sched_timer_ID, 0, &_sched_stop_timer, NULL))
+    if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, NULL))
         __error("Error disarming timer", 21);
     if (r->st != ZOMBIE)
         r->res = NULL;
     free(r->buf);
-    // Liberar memoria
-    sigqueue(getpid(), SIG_TASK_END, (union sigval) 0); // Como mandar union nula?
+    release_stack(r);
+    sigqueue(getpid(), SIG_TASK_END, (union sigval) 0); // Mando union 0, revisar
 }
 
 
 void *join_routine(Task *to)
 {
     while (to -> st != ZOMBIE) {
-        if (timer_settime(sched_timer_ID, 0, &_sched_stop_timer, NULL))
+        if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, NULL))
             __error("Error disarming timer", 21);
         sigqueue(getpid(), SIG_TASK_YIELD, (union sigval) 0);
     }
@@ -105,26 +118,68 @@ void block_routine(Task *target)
 void unblock_routine(Task *target)
 {
     struct itimerspec old;
-    if (timer_settime(sched_timer_ID, 0, &_sched_stop_timer, &old))
-        _error("Error disarming timer", 21);
+    if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, &old))
+        __error("Error disarming timer", 21);
     target -> st = READY;
     if (target -> queued == 0) {
         union sigval task_pointer = {.sival_ptr = target};
         sigqueue(getpid(), SIG_TASK_NEW, task_pointer);
     }
     else {
-        old.it_interval = 0;
-        timer_settime(sched_timer_ID, 0, &old);
+        old.it_interval = (struct timespec) {0};
+        timer_settime(sched_timer_ID, 0, &old, NULL);
     }
+}
+
+
+void scheduler(int signum, siginfo_t *data, void* extra)
+{
+    static Task *current_task;
+
+    /* Guardar tarea anterior y guardar checkpoint */
+    if (signum != SIG_TASK_END && qelem_current != NULL) {
+        if (qelem_current -> lvl < QUEUE_NUMBER - 1)
+            qelem_current -> lvl ++;
+        queue_insert(queues, qelem_current);
+        current_task = (Task *) qelem_current -> data;
+        current_task -> queued = 1;
+        if (current_task -> st == ACTIVE)
+            current_task -> st = READY;
+        YIELD(current_task);
+    }
+
+    /* Encolar nueva tarea en la cola de mayor prioridad */
+    if (signum == SIG_TASK_NEW) {
+        queue_new_node(queues, data -> si_value.sival_ptr);
+        ((Task *) data -> si_value.sival_ptr) -> queued = 1;
+    }
+
+    /* Desencolar proxima tarea a ser ejecutada */
+    do
+        qelem_current = queue_pop(queues);
+    while (((Task *) qelem_current -> data) -> st == BLOCKED);
+    current_task = (Task *) qelem_current -> data;
+    current_task -> queued = 0;
+
+    current_task -> st = ACTIVE;
+    sched_time_setting.it_value.tv_nsec = TIME_L(qelem_current -> lvl);
+    if (timer_settime(sched_timer_ID, 0, &sched_time_setting, NULL))
+        __error("Error setting timer", 19);
+    debug();
+    ACTIVATE(current_task);
 }
 
 
 void start_sched(Task *maintask)
 {
+	/* Setting de timer, señales y handler */
     sigset_t block_these;
-    if(sigfillset(&block_these))
+    // Con empty se soluciono, porque!!??
+    if(sigemptyset(&block_these))
         __error("Error in signal config", 22);
-    struct sigaction sa = {.sa_sigaction = _sched,
+    //sigdelset(&block_these, SIG_TASK_YIELD);
+    //sigdelset(&block_these, SIG_TASK_NEW);
+    struct sigaction sa = {.sa_sigaction = scheduler,
                           .sa_mask = block_these,
                           .sa_flags = SA_SIGINFO
                           };
@@ -136,48 +191,30 @@ void start_sched(Task *maintask)
                          .sigev_signo = SIG_TASK_YIELD};
     if (timer_create(CLOCK_REALTIME, &se, &sched_timer_ID))
         __error("Error creating timer", 20);
+
+    /* Setting de maintask */
     jmp_buf *jb = malloc(sizeof(jmp_buf));
-    *maintask = {.buf = jb};
+    maintask -> buf = jb;
+    maintask -> st = ACTIVE;
+    maintask -> arg = NULL;
+    maintask -> fun = NULL;
+    maintask -> res = NULL;
+    maintask -> queued = 0;
+    /* initial_rsp se inicia con el rsp actual */
+    asm("movq %%rsp, %0"
+    	: "+m" (initial_rsp));
+    maintask -> mem_position = take_stack();
+
+    /* Creacion de colas para tareas */
+    queues = malloc(sizeof(pqueue));
+    *queues = queue_create(QUEUE_NUMBER);
+
+    /* Primer llamado al handler (sched) */
+    YIELD(maintask);
     union sigval task_pointer = {.sival_ptr = maintask};
     sigqueue(getpid(),SIG_TASK_NEW,task_pointer);
-    return;
+    /* El handler deberia volver y seguir con maintask */
 }
 
-// Introducir manejo de task con state Blocked
-void _sched(int signum, siginfo_t *data, void* extra)
-{
-    static multi_queue queues = queue_create(QUEUE_NUMBER);
-    static Task *current_task;
 
-    /* Guardar tarea anterior y guardar checkpoint */
-    if (signum != SIG_TASK_END && _task_current != NULL) {
-        if (_task_current -> lvl < QUEUE_NUMBER - 1)
-            _task_current -> lvl ++;
-        queue_insert(&queues, _task_current)
-        current_task = (Task *) _task_current -> data;
-        current_task -> queued = 1;
-        if (current_task -> st == ACTIVE)
-            current_task -> st = READY;
-        YIELD(current_task);
-    }
-
-    /* Encolar nueva tarea en la cola de mayor prioridad */
-    if (signum == SIG_TASK_NEW) {
-        queue_new_node(queues, data -> si_value.sival_ptr);
-        (data -> si_value.sival_ptr) -> queued = 1;
-    }
-
-    /* Desencolar proxima tarea a ser ejecutada */
-    do
-        _task_current = queue_pop(queues);
-    while (((Task *) _task_current -> data) -> st == BLOCKED);
-    current_task = (Task *) _task_current -> data;
-    current_task -> queued = 0;
-
-    current_task -> st = ACTIVE;
-    sched_time_setting.it_value.tv_nsec = TIME_L(_task_current -> lvl);
-    if (timer_settime(sched_timer_ID, 0, &sched_time_setting, NULL))
-        __error("Error setting timer", 19);
-    ACTIVATE(current_task);
-}
 
