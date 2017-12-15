@@ -24,23 +24,6 @@ void *f1(void *a)
     return NULL;
 }
 
-/*
-
-void *f2(void *a)
-{
-    while (1)
-        print("Soy f2");
-}
-
-
-void *f3(void *a)
-{
-    while (1)
-        print("Soy f3");
-}
-
-*/
-
 
 int main(void)
 {
