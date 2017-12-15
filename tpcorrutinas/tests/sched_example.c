@@ -30,17 +30,22 @@ void *f3(void *a)
 int main(void)
 {
     Task maint;
+    char arr[1000];
     start_sched(&maint);
-    for (int i = 0; i < 1000; i++)
-        write(STDOUT_FILENO, "hola", 5);
+    int ind = 0;
+    for (int i = 0; i < 1000; i++) {
+        for (char j = 'a'; j <= 'z'; j++)
+            arr[i] = j;
+        if (ind%100 == 0)
+            puts("check");
+        ind++;
+    }   
     /*
     union sigval sv = {.sival_ptr = &maint};
     if (sigqueue(getpid(), SIG_TASK_YIELD, sv) != 0)
         puts("sigqueue error");
     */
     // sleep(1);
-    for (int i = 0; i < 1000; i++)
-        write(STDOUT_FILENO, "hola", 5);
     return 0;
 }
 

@@ -42,18 +42,21 @@ typedef struct {
 
 #define QUEUE_NUMBER 5 // Cantidad de colas que utilizara el scheduler
 
-#define SIG_TASK_END (SIGRTMIN)
-#define SIG_TASK_NEW (SIGRTMIN+1)
-#define SIG_TASK_YIELD (SIGRTMIN+2)
+#define SIG_TASK_END (SIGRTMIN) // 34
+#define SIG_TASK_NEW (SIGRTMIN+1) // 35
+#define SIG_TASK_YIELD (SIGRTMIN+2) // 36
 
-#define MS 1000 /* 1 ms = 1000 ns */
+#define MS 1000000 /* 1 ms = 1000000 ns */
 #define TICK 5
 #define QUANTUM 4
 #define TIME_L(x) (QUANTUM*TICK*MS*(1<<(x)))
 
 #define ACTIVATE(d) (longjmp(*((d)->buf),1))
 #define YIELD(o) ( ({ if(setjmp(*((o)->buf))){return;} }) )
-// #define FINALIZE(tarea) ( ({ _sched_time_setting={0};  }) )
+#define FINALIZE(t) (scheduler(SIG_TASK_END,NULL,NULL))
+
+#define block_sched() sched_blocker(0)
+#define unblock_sched() sched_blocker(1)
 
 
 
@@ -66,6 +69,8 @@ void stop_routine(Task *);
 void *join_routine(Task *);
 
 void start_sched(Task *);
+
+void scheduler(int, siginfo_t *, void *);
 
 
 #endif //__SCHED_H
