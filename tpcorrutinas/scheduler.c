@@ -73,7 +73,6 @@ void create_routine(TaskFunc f, void *arg, Task *new)
         union sigval task_pointer = {.sival_ptr = new};
         if (sigqueue(getpid(), SIG_TASK_NEW, task_pointer))
             __error("sigqueue error",14);
-        debug();
     }
     return;
 }
@@ -86,7 +85,6 @@ void _start_routine(Task *new, jmp_buf *b)
         longjmp(*b,1);
     }
     else {
-        debug();
         new -> res = (new->fun)(new->arg);
         new -> st = ZOMBIE;
         stop_routine(new);
@@ -113,7 +111,7 @@ void *join_routine(Task *to)
     while (to -> st != ZOMBIE) {
         if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, NULL))
             __error("Error disarming timer", 21);
-        sigqueue(getpid(), SIG_TASK_YIELD, (union sigval) 0);
+        scheduler(SIG_TASK_YIELD, NULL, NULL);
     }
     return to->res;
 }
@@ -134,7 +132,8 @@ void unblock_routine(Task *target)
     target -> st = READY;
     if (target -> queued == 0) {
         union sigval task_pointer = {.sival_ptr = target};
-        sigqueue(getpid(), SIG_TASK_NEW, task_pointer);
+        siginfo_t data = {.si_value = task_pointer};
+        scheduler(SIG_TASK_NEW, &data, NULL);
     }
     else {
         old.it_interval = (struct timespec) {0};
@@ -167,11 +166,15 @@ void scheduler(int signum, siginfo_t *data, void* extra)
     }
 
     /* Desencolar proxima tarea a ser ejecutada */
-    do
+    while (1) {
         qelem_current = queue_pop(queues);
-    while (((Task *) qelem_current -> data) -> st == BLOCKED);
-    current_task = (Task *) qelem_current -> data;
-    current_task -> queued = 0;
+        current_task = (Task *) qelem_current -> data;
+        current_task -> queued = 0;
+        if (current_task -> st == BLOCKED)
+            free(qelem_current); // Abstraerlo a pqueue?
+        else
+            break;
+    }
 
     current_task -> st = ACTIVE;
     sched_time_setting.it_value.tv_nsec = TIME_L(qelem_current -> lvl);

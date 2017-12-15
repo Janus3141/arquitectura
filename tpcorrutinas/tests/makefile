@@ -2,7 +2,7 @@
 all: example
 
 example: scheduler.o pqueue.o mm.o
-	gcc sched_example2.c scheduler.o pqueue.o mm.o -lrt -g -o sched_example
+	gcc $(OBJ) scheduler.o pqueue.o mm.o -lrt -g -o sched_example
 
 scheduler.o: ../scheduler.c
 	gcc -g -c ../scheduler.c
