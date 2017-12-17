@@ -1,34 +1,29 @@
 
+/********** Priority queues *********/
+
 #include <malloc.h>
 #include "pqueue.h"
 #include <stdlib.h>
 #include <unistd.h>
-
-
-void __q_error(char *m, size_t size)
-{
-    write(STDERR_FILENO, m, size);
-    _Exit(EXIT_FAILURE);
-}
+#include "gerror.h"
 
 
 pqueue queue_create(char n)
 {
     q_elem **backs = calloc(n, sizeof(q_elem *));
-    if (backs == NULL) __q_error("No space to allocate", 20);
+    if (backs == NULL) __error("No space to allocate", 20);
     int *sizes = calloc(n, sizeof(char));
-    if (sizes == NULL) __q_error("No space to allocate", 20);
-    pqueue mq = {.front = NULL,
+    if (sizes == NULL) __error("No space to allocate", 20);
+    pqueue pq = {.front = NULL,
                       .backs = backs,
                       .size = sizes,
                       .maxlevel = n-1};
-    return mq;
+    return pq;
 }
 
 
 void queue_destroy(pqueue *q)
 {
-    // No se provee proteccion contra un fallo de free
     if (q -> front != NULL) {
         while ((q -> front) -> next != NULL) {
             q -> front = (q -> front) -> next;
@@ -56,7 +51,7 @@ void queue_insert(pqueue *q, q_elem *elem)
         }
         else {
             /* Busco vecinos hacia el frente de la cola. Seguro hay
-               por condicion anterior false */
+               por condicion anterior falsa */
             for (char i = elem->lvl - 1; i >= 0; i--) {
                 if ((q->size)[i] != 0) {
                     elem -> next = (q->backs)[i] -> next;
@@ -81,6 +76,8 @@ void queue_insert(pqueue *q, q_elem *elem)
 void queue_new_node(pqueue *q, void *elem)
 {
     q_elem *new = malloc(sizeof(q_elem));
+    if (new == NULL)
+        __error("queue malloc error", 18);
     new -> data = elem;
     new -> lvl = 0;
     if ((q->size)[0] > 0) {
@@ -112,4 +109,18 @@ q_elem *queue_pop(pqueue *q)
     return poped;
 }
 
+
+void queue_lift(pqueue *q)
+{
+    q_elem *iter = q->front;
+    while (iter->next != NULL) {
+        iter->lvl = 0;
+        iter = iter -> next;
+    }
+    iter -> lvl = 0;
+    (q->backs)[0] = iter;
+    for (int i = 1; i <= q->maxlevel; i++)
+        (q->backs)[i] = NULL;
+    return;
+}
 

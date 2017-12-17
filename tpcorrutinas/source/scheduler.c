@@ -6,13 +6,13 @@
 
 #include <signal.h>
 #include <time.h>
-#include <string.h>
 #include <unistd.h>
-#include <stdlib.h>
+#include <malloc.h>
 #include <setjmp.h>
 #include "scheduler.h"
 #include "pqueue.h"
 #include "mm.h"
+#include "gerror.h"
 
 #define debug() (write(STDOUT_FILENO, "debug\n", 6))
 #define debug2() (write(STDOUT_FILENO, "sched\n", 6))
@@ -42,20 +42,15 @@ pqueue *queues;
 
 /********** Definiciones de funciones **********/
 
-void __error(char *m, size_t n)
-{
-    write(STDERR_FILENO, m, n);
-    _Exit(EXIT_FAILURE);
-}
-
-
-void create_routine(TaskFunc f, void *arg, Task *new)
+void create_task(TaskFunc f, void *arg, Task *new)
 {
     /* Primero se desarma el timer para ejecutar malloc de forma segura */
     if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, NULL))
             __error("Error disarming timer", 21);
     jmp_buf creator_buf;
     jmp_buf *jb = malloc(sizeof(jmp_buf));
+    if (jb == NULL)
+        __error("create_task malloc error",24)
     new->buf = jb;
     new->st = READY;
     new->arg = arg;
@@ -65,7 +60,7 @@ void create_routine(TaskFunc f, void *arg, Task *new)
         asm("movq %0, %%rdi\n"
             "movq %1, %%rsi\n"
             "movq %2, %%rsp\n"
-            "call _start_routine"
+            "call _start_task"
             :
             : "m" (new), "rm" (&creator_buf), "m" (new->mem_position));
     }
@@ -78,21 +73,21 @@ void create_routine(TaskFunc f, void *arg, Task *new)
 }
 
 
-void _start_routine(Task *new, jmp_buf *b)
+void _start_task(Task *new, jmp_buf *b)
 {
-    /* Solo para ser llamada por create_routine() */
+    /* Solo para ser llamada por create_task() */
     if (setjmp(*(new->buf)) == 0) {
         longjmp(*b,1);
     }
     else {
         new -> res = (new->fun)(new->arg);
         new -> st = ZOMBIE;
-        stop_routine(new);
+        stop_task(new);
     }
 }
 
 
-void stop_routine(Task *r)
+void stop_task(Task *r)
 {
     /* Si se quiere saber si la funcion termino antes de llamar a stop,
        verificar state */
@@ -106,7 +101,7 @@ void stop_routine(Task *r)
 }
 
 
-void *join_routine(Task *to)
+void *join_task(Task *to)
 {
     while (to -> st != ZOMBIE) {
         if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, NULL))
@@ -117,14 +112,14 @@ void *join_routine(Task *to)
 }
 
 
-void block_routine(Task *target)
+void block_task(Task *target)
 {
     if (target -> st == READY)
         target -> st = BLOCKED;
 }
 
 
-void unblock_routine(Task *target)
+void unblock_task(Task *target)
 {
     struct itimerspec old;
     if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, &old))
@@ -178,7 +173,6 @@ void scheduler(int signum, siginfo_t *data, void* extra)
 
     current_task -> st = ACTIVE;
     sched_time_setting.it_value.tv_nsec = TIME_L(qelem_current -> lvl);
-    /* sched_time_setting.it_value.tv_sec = 3;*/
     if (timer_settime(sched_timer_ID, 0, &sched_time_setting, NULL))
         __error("Error setting timer", 19);
     ACTIVATE(current_task);
@@ -228,11 +222,8 @@ void start_sched(Task *maintask)
     *queues = queue_create(QUEUE_NUMBER);
 
     /* Primer llamado al handler (sched) */
-    //YIELD(maintask);
-    if (setjmp(*jb) != 0)
-        return;
+    YIELD(maintask);
     union sigval task_pointer = {.sival_ptr = maintask};
-    // sigqueue(getpid(),SIG_TASK_NEW,task_pointer);
     siginfo_t inf = {.si_value = task_pointer};
     scheduler(SIG_TASK_NEW, &inf, NULL);
 }
