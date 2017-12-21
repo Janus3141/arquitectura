@@ -1,5 +1,5 @@
 
-#include "../scheduler.h"
+#include "source/scheduler.h"
 #include <unistd.h>
 #include <time.h>
 #include <stdio.h>
@@ -29,10 +29,10 @@ int main(void)
 {
     Task maint, f1t;
     start_sched(&maint);
-    create_routine(f1, NULL, &f1t);
+    create_task(f1, NULL, &f1t);
     char thearray[100];
     int counter = 0;
-    block_routine(&f1t);
+    //block_task(&f1t);
     while (counter < 1000000) {
         for (char a = 'a'; a <= 'z'; a++) {
             for (char i = 0; i < 100; i++)
@@ -42,8 +42,8 @@ int main(void)
             counter++;
         }
     }
-    unblock_routine(&f1t);
-    join_routine(&f1t);
+    //unblock_task(&f1t);
+    join_task(&f1t);
     return 0;
 }
 

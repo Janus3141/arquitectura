@@ -37,10 +37,9 @@ typedef struct {
 #define SIG_TASK_YIELD (SIGRTMIN+2) // 36
 
 #define MS 1000000 /* 1 ms = 1000000 ns */
-#define TICK 5
-#define QUANTUM 4
+#define TICK 20
 /* Tiempo de procesador que obtendra la tarea en funcion de su nivel */
-#define TIME_L(x) (QUANTUM*TICK*MS*(1<<(x)))
+#define QUANTUM(x) (TICK*MS*(1<<(x)))
 
 /* Macros para controlar apropiacion */
 #define ACTIVATE(d) (longjmp(*((d)->buf),1))
@@ -61,9 +60,19 @@ void stop_task(Task *);
 
 void *join_task(Task *);
 
+void block_task(Task *);
+
+void unblock_task(Task *);
+
 void start_sched(Task *);
 
+void task_yield(void);
+
+void sched_blocker(char);
+
 void scheduler(int, siginfo_t *, void *);
+
+void destroy_sched(void);
 
 
 #endif //__SCHED_H

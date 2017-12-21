@@ -12,7 +12,6 @@
 typedef struct _q_elem {
     void *data;
     struct _q_elem *next;
-    struct _q_elem *prev;
     char lvl;
 } q_elem;
 

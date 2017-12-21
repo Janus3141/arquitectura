@@ -37,7 +37,7 @@ void *memory_manager(void *set_free, char action)
                 free_spots[i] = 0;
         }
         free_spots[next_free_spot] = 1;
-        void *result = initial_rsp + (MEM_TASK_SIZE*next_free_spot);
+        void *result = initial_rsp - (MEM_TASK_SIZE*next_free_spot);
         for (int i = 0; i <= spots_count; i++) {
             if (free_spots[i] == 0) {
                 next_free_spot = i;
@@ -54,7 +54,7 @@ void *memory_manager(void *set_free, char action)
         return NULL;
     }
     else if (action == MM_DESTROY)
-        free(free_spot);
+        free(free_spots);
 }
 
 

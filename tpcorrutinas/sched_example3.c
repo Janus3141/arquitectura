@@ -12,7 +12,7 @@ void *f1(void *a)
 {
     char thearray[100];
     int counter = 0;
-    while (counter < 1000000) {
+    while (1) {
         for (char a = 'a'; a <= 'z'; a++) {
             for (char i = 0; i < 100; i++)
                 thearray[i] = a;
@@ -32,7 +32,7 @@ void *f2(void *a)
     char thearray[100];
     int counter = 0;
     write(STDOUT_FILENO, (char *) a, 6);
-    while (counter < 500000) {
+    while (1) {
         for (char a = 'a'; a <= 'z'; a++) {
             for (char i = 0; i < 100; i++)
                 thearray[i] = a;

@@ -62,7 +62,7 @@ typedef struct {
 #define shmem_close(sm) (shmem_region_manager(SHMEM_REG_DEL,0,(sm)->index))
 
 /* void shmem_destroy(void) */
-#define shmem_destrot() (shmem_region_manager(SHMEM_DESTROY_ALL,0,0))
+#define shmem_destroy() (shmem_region_manager(SHMEM_DESTROY_ALL,0,0))
 
 shmem_t shmem_region_manager(char, char, char);
 

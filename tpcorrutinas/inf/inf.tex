@@ -1,0 +1,334 @@
+
+\documentclass[a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{float}
+\renewcommand{\baselinestretch}{1}
+\usepackage[margin=4cm]{geometry}
+\usepackage{proof}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\renewcommand{\familydefault}{\sfdefault}
+\lstset{language=Haskell,
+        basicstyle=\small,
+        showspaces=false,
+        showstringspaces=false}
+\pagestyle{fancy}
+\lhead{Corrutinas avanzadas}
+\rhead{Bruno Sotelo}
+
+\newcommand{\bind}{\gg\!\!=}
+
+\setlength{\parindent}{0in}
+
+\begin{document}
+
+
+\begin{titlepage}
+\centering
+\begin{figure}[H]
+    \begin{center}
+        \includegraphics[width=2cm,height=2cm]{UNR_logo.jpg}
+    \end{center}
+\end{figure}
+{\scshape\large Facultad de Ciencias Exactas, Ingenier\'ia y Agrimensura\\*
+                 Licenciatura en Ciencias de la Computaci\'on\par}
+\vspace{5cm}
+{\scshape\LARGE Arquitectura del computador \par}
+{\huge\bfseries Trabajo Pr\'actico final \par}
+{\huge\bfseries Corrutinas avanzadas \par}
+\vspace{3cm}
+{\Large Sotelo, Bruno\par}
+\vfill
+{\large 18  / 12 / 2017 \par}
+\end{titlepage}
+
+
+
+\section{Introducción}
+El scheduler implementado en el trabajo es del tipo Multilevel Feedback 
+Queue, se utilizan varias colas donde cada una posee una cantidad de
+quantums diferente. Este tipo de scheduler ha demostrado funcionar muy
+bien en sistemas en general ya que permite separar fácilmente a las
+tareas que hacen gran uso del procesador y las que se centran en I/O. Al
+contrario del Multilevel Queue Scheduler, donde a las tareas se les
+asigna una prioridad y son insertadas en la cola con la prioridad 
+correspondiente, en este scheduler las tareas pueden cambiar su prioridad,
+dando lugar a un mayor dinamismo ante cambios de comportamiento de las
+mismas, y evitando también starvations en las colas de más baja prioridad.
+Para facilitar su uso se implementó una interfaz similar a la de los
+Pthreads de C, por ejemplo: las funciones que serán alimentadas al scheduler
+tienen como tipo \textbf{void *f(void *)}, para activarlas se utiliza una
+función \textbf{create\_task}, y una tarea puede esperar a que otra termine
+con \textbf{join\_task}. \\
+En cuanto a la comunicación entre tareas, se eligió el esquema de shared
+memory. La interfaz de I/O con este IPC es muy similar a la de un archivo,
+cada tarea puede crear una o varias conexiones con un segmento de memoria
+compartida y poseerá un puntero a esta en cada una de las conexiones. El
+puntero puede moverse libremente en el área escrita de un segmento, pero
+se encuentra la restricción de escribir secuencialmente (es decir, la 
+parte escrita del área será una sola, sin espacios no escritos en el
+medio). \\
+Para realizar los locks también se usó una interfaz similar a los locks
+de Pthreads, aunque muy simplificada. Se puede crear, bloquear, desbloquear
+y eliminar un lock.
+
+\section{Scheduler}
+Como se dijo al principio, el scheduler utiliza múltiples colas de tareas.
+Como además cada cola representa una prioridad de ejecución, una buena forma
+de crearlas y mantenerlas es la estructura de \textbf{cola de prioridad}.
+Esta se encuentra implementada en los archivos \textit{pqueue.c} y
+\textit{pqueue.h}. Es una implementación mínima pero suficiente para este
+scheduler, en ella se puede: insertar un nuevo nodo con la prioridad más
+alta (\textit{pqueue\_new\_node}), reinsertar un nodo con una prioridad
+cualquiera (\textit{pqueue\_insert}), quitar y poseer el primer elemento
+de la cola (\textit{pqueue\_pop}) y mover todos los elementos a la mayor
+prioridad (\textit{pqueue\_lift}, una función específica para este scheduler).
+Esta implementación es bastante flexible y simple para ayudar a mantener
+así también el código del scheduler. \\
+Para comenzar a utilizarlo, primero se deberá reservar espacio para una
+estructura Task. Esta contiene toda la información necesaria para
+administrar la ejecución de la tarea: 
+\begin{itemize}
+    \item Un buffer sobre el cual se ejecuta \textit{setjmp} y
+    \textit{longjmp} para controlar el hilo de ejecución,
+    \item Una variable \textit{Task\_State} que mantiene el estado actual
+    de la tarea. Se consideran en este trabajo cuatro estados: activa
+    (la tarea está utilizando el procesador), lista (desea utilizar el
+    procesador pero debe esperar su turno), bloqueada (se encuentra a
+    la espera de ser desbloqueada por alguna condición) y zombie (la
+    tarea ya terminó y no utilizará más el procesador, se mantiene en
+    este estado para conocer su resultado, y saber que terminó).
+    \item El argumento que recibe la tarea al momento de ser ejecutada
+    (le es entregado a través de \textit{create\_task}).
+    \item Un puntero a la función que ejecuta la tarea.
+    \item Un puntero al resultado de la función ejecutada (será NULL
+    si no termina).
+    \item Un bit (\textit{queued}) que indica si la función se encuentra
+    en alguna cola de espera del scheduler o no.
+    \item Posición inicial del stack de memoria. Cada tarea posee un
+    fragmento de stack sobre el cual puede actuar libremente. El tamaño
+    de uno de estos fragmentos está parametrizado por una macro en
+    \textit{mm.h}.
+\end{itemize}
+Una vez reservada una estructura \textit{Task}, se debe llamar a la
+función \textit{start\_sched}, que recibe como argumento un puntero
+a \textit{Task}, una tarea tratada especialmente porque representa
+el hilo de ejecución principal del programa creado. En la función
+se realizan varios ajustes y creaciones de variables necesarias
+para poner el scheduler en marcha. Primero se setea el manejo de
+señales del programa. La función \textit{scheduler},
+definida también en \textit{scheduler.c}, actuará como handler de
+las señales RT \textit{SIG\_TASK\_YIELD, SIG\_TASK\_NEW, SIG\_TASK\_END},
+las cuales indicarán a este handler que la tarea activa le "devuelve"
+el procesador, que se crea una nueva tarea y que la tarea activa
+termina y no se le debe dar el procesador nuevamente, respectivamente.
+Se utilizan señales real-time ya que poseen más beneficios que las
+señales de POSIX-1. Luego se crea un nuevo timer,
+\textit{sched\_timer\_ID} que controlará el tiempo de ejecución que se
+le cede a una tarea; el scheduler pone en marcha este timer antes
+de poner la tarea en ejecución, y al llegar el timer a 0 mandará
+una señal \textit{SIG\_TASK\_YIELD} que lo pondrá de nuevo en marcha
+para continuar otra tarea. \\
+Lo siguiente en \textit{start\_sched} es setear los valores de la
+estructura \textit{maintask}. el miembro \textit{mem\_position} es
+iniciado con la función \textit{take\_stack}, esta es en realidad una
+macro definida en \textit{mm.h} que abstrae a \textit{memory\_manager},
+la cual controla los segmentos de stack que posee cada tarea. Puede
+entregar a una nueva tarea un puntero al próximo segmento libre (que
+ninguna otra está usando) o una tarea puede indicarle que no utilizará
+más su segmento con la macro \textit{release\_stack}, y el manager lo
+marcará como libre para cederlo a otra tarea. El tamaño de uno de
+estos segmentos está parametrizado con la macro \textit{MEM\_TASK\_SIZE}
+en \textit{mm.h}, y también puede modificarse allí la cantidad de
+espacio que reservará el manager en caso de quedarse sin con la
+macro \textit{MEM\_TASKS\_PER\_SEG} (esta mención de segmento es
+diferente a la anterior, en este caso un segmento contiene varias
+tareas), el objetivo de esto es amortizar el costo de reservar espacio
+en heap al hacerlo para más de una tarea a la vez. \\
+Lo que sigue es crear la cola de tareas del scheduler. También está
+parametrizada la cantidad de colas (prioridades) que se utilizarán
+con la macro \textit{QUEUE\_NUMBER}. Observar que puede crearse un
+scheduler Round Robin si se define $QUEUE\_NUMBER = 1$. Finalmente
+se pone un checkpoint en el lugar con la macro \textit{YIELD},
+básicamente una llamada a \textit{setjmp}, y se llama al scheduler. \\
+El funcionamiento del scheduler en general es como sigue:
+\begin{enumerate}
+    \item Si la señal no es \textit{SIG\_TASK\_END} y
+    \textit{qelem\_current} no es \textit{NULL}, la tarea que estaba
+    en ejecución se guardará nuevamente en la cola de tareas listas
+    y se hará un checkpoint (\textit{YIELD}) al cual volver cuando
+    el scheduler elija otra vez esta tarea, y que implica retornar
+    del handler para continuar la ejecución que se estaba dando.
+    Observar que la segunda condición será falsa sólo en la primera
+    llamada a \textit{scheduler}. En cuanto a la primera, su razón es
+    que esa señal sólo será enviada por una tarea al terminar a
+    través de la función \textit{stop\_task}, con la macro
+    \textit{FINALIZE}, por lo cual no se le debe entregar otra
+    vez el procesador, y no se debe encolar.
+    \item Antes de encolar la tarea que estaba en ejecución se decide
+    en qué nivel de prioridad se lo hace. Si la tarea utilizó todo
+    el tiempo dado normalmente, se bajará en 1 su prioridad, ya que
+    es probable que sea una tarea que usará más tiempo de CPU.
+    En cambio, si la tarea utilizó \textit{task\_yield}, que devuelve
+    el control al scheduler antes de finalizar su segmento de tiempo,
+    tiene que ser porque se encuentra esperando I/O, un lock, o que
+    alguna otra condición se cumpla para seguir su ejecución,
+    entonces se deja a la tarea en su prioridad actual.
+    \item Si la señal que llegó es \textit{SIG\_TASK\_NEW}, se deberá
+    introducir en la cola de espera, al final de la prioridad 0, la
+    nueva tarea. Su puntero (\textit{Task *}) se pasa como argumento
+    en \textit{data -> si\_value.sival\_ptr}.
+    \item Cada cierto tiempo es prudente subir la prioridad de todas
+    las tareas en la cola de espera a la más alta. Esto permite
+    evitar starvations y mejora la dinámica del scheduler, haciendo
+    que se adapte mejor a los comportamientos de las tareas. La
+    acción se encuentra implementada como parte de la estructura
+    \textit{pqueue} con la función \textit{queue\_lift}.
+    \item Luego se debe tomar la próxima tarea a ser ejecutada de la
+    cola de espera con \textit{queue\_pop}. Al hacerlo se debe
+    asegurar que la tarea no fue bloqueada. Luego se explicará el
+    mecanismo de bloqueo.
+    \item Finalmente se configura el estado de la tarea elegida en
+    \textit{ACTIVE}, se calcula la cantidad de quantums que podrá
+    usar para correr, se activa el timer con ese valor y se activa
+    la tarea. Los tiempos de ejecución están parametrizados con
+    las macros \textit{TICK}, que es la duración en milisegundos
+    de un quantum, y con \textit{QUANTUM(x)} se puede especificar
+    la cantidad de quantums que obtiene una tarea de nivel $x$.
+    En este caso la función de quantums es, como es recomendado,
+    exponencial en función del nivel de tarea.
+\end{enumerate}
+Sobre el bloqueo de tareas: Si una tarea necesita bloquear a otra
+debe utilizar la función \textit{block\_task}, la cual, dado un
+puntero a la tarea a bloquear, simplemente cambia el estado de esa
+tarea a \textit{BLOCKED}, siempre que el estado anterior sea
+\textit{READY}, ya que no tendría sentido cambiar el estado de una
+tarea \textit{ZOMBIE}, y no se debería bloquear con esta función
+a la tarea con estado \textit{ACTIVE}, ya que implicaría que una
+tarea se está bloqueando a sí misma. Si la tarea se bloquea a sí
+misma por este medio, no tendrá forma de desbloquearse luego si
+no lo hace otra tarea, y quedará en starvation. Si una tarea
+necesita esperar a una condición debería esperar en un loop donde,
+si la condición aún no es verdadera, devuelve el control de CPU
+al scheduler mediante \textit{task\_yield}, y, cuando obtenga
+nuevamente el procesador, volver a evaluar la condición. \\
+Cuando una tarea es bloqueada, si fue iniciada con
+\textit{create\_task} entonces en ese momento debe estar en la cola
+de espera de tareas, y seguirá allí hasta que el scheduler la
+elija para entregarle tiempo de CPU. Si cuando el scheduler
+desencola la tarea esta tiene estado \textit{BLOCKED}, procederá
+a eliminar el qelem correspondiente (no la tarea) y a
+desencolar otra tarea que no esté bloqueada. En algún momento
+la tarea que la bloqueó, la desbloqueará, y para ello utilizará
+\textit{unblock\_task}. La función le devuelve el estado
+\textit{READY} y diferencia entre dos casos: la tarea está en la
+cola de espera o no; si lo está, no necesita hacer nada más, el
+scheduler le entregará el procesador como si nada hubiera
+sucedido; si no lo está, es necesario crear un nuevo elemento
+en la cola que contenga a esta tarea, el scheduler lo hará al
+enviársela como si fuera una recién creada, y se la coloca con
+prioridad 0 en la cola.
+
+\section{Locks}
+Los locks se encuentran implementados en \textit{locks.c}, en forma
+de spinlocks (por lo cual se los nombra \textit{sp}). Para crear,
+borrar o destruir un lock se utiliza \textit{task\_sp\_manager}, a
+través de las macros \textit{task\_sp\_init},\textit{task\_sp\_remove}
+y \textit{task\_sp\_destroy\_all}, respectivamente. Para saber si un
+lock es utilizable o no, en la estructura \textit{task\_sp\_arr\_t}
+se guarda un campo donde se lo indica: si es
+\textit{TASK\_SP\_INIT} entonces se puede usar, de lo contrario es
+\textit{TASK\_SP\_UNINIT}. El otro campo de la estructura es un
+entero que representa el valor del lock; una tarea debe tomarlo y
+verificar que el valor sea \textit{TASK\_SP\_UNLOCK} para continuar
+su ejecución, de lo contrario el valor es \textit{TASK\_SP\_LOCK}
+y la tarea debe bloquearse para intentar tomar el lock nuevamente más
+tarde. Para tomar un lock se debe utilizar \textit{task\_sp\_lock},
+que crea una llave con valor \textit{TASK\_SP\_LOCK} para la tarea y
+la intercambia con la llave del lock atómicamente por medio de la
+instrucción \textit{xchg}. Si el lock no estaba iniciado, será
+devuelto un código de error \textit{TASK\_SP\_FAIL}, de lo contrario
+todo salió bien y se devuelve \textit{TASK\_SP\_OK}. Una vez pasada
+la región crítica protegida por el lock, la tarea debería llamar a
+\textit{task\_sp\_unlock} para dejar que otras tareas puedan tomarlo.
+
+\section{Comunicación}
+La comunicación entre procesos se realiza mediante shared memory, y
+está implementada en \textit{mm.c}. Para comenzar a utilizar un área
+o región de memoria compartida, la tarea debe iniciar una conexión
+usando \textit{shmem\_new} y dando el nombre del área (un caracter,
+lo cual limita el número de áreas a 127). Esta función es una macro
+que abstrae al manejador de memoria compartida
+\textit{shmem\_region\_manager}, el cual puede crear o remover
+regiones. \textit{shmem\_new} devuelve un puntero a una estructura
+\textit{shmem\_t}, que podrá ser utilizado como argumento para las
+funciones de interfaz de shared memory (la estructura es opaca para
+el usuario). \\
+El tamaño de una región de memoria compartida está parametrizado
+por la macro \textit{SHMEM\_REGION\_SIZE}. Aquí se utilizan 254
+bytes por región de memoria. \\
+La estructura \textit{shmem\_t} contiene un puntero (*) a la región
+de memoria compartida y un entero que representa el puntero de la
+tarea sobre esa región. Cada región puede ser accedida por
+cualquier cantidad de tareas (no concurrentemente), y cada tarea
+debería iniciar su propia conexión a la región, ya que así tendrá
+su puntero sobre ella. Este puntero funciona de manera similar a
+los punteros de archivos: si se leen 5 bytes de la región, el
+puntero sumará 5 para que la tarea continue leyendo desde el punto
+en que paró. Si se escriben 5 bytes, se los escribe a partir de la
+posición actual del puntero (como sucede en un archivo abierto en
+modo \textit{append}), y este se deja en el próximo byte a
+escribir. También se puede cambiar la posición del puntero con la
+función \textit{shmem\_seek}; esta toma como argumentos un 
+\textit{shmem\_t *}, un \textit{unsigned char} que es la posición
+de puntero deseada, y un \textit{char} que puede ser:
+\begin{itemize}
+    \item \textit{SEEK\_ABS}, entonces la posición de puntero
+    indicada es absoluta en la región (se indexa desde 0).
+    \item \textit{SEEK\_OFFSET}, con el cual la posición indicada
+    es relativa a la posición actual del puntero (se suma el
+    argumento a la posición).
+    \item \textit{SEEK\_REV\_OFFSET}, que es similar a
+    \textit{SEEK\_OFFSET}, sólo que el argumento es restado a la
+    posición actual.
+\end{itemize}
+La nueva posición del puntero a la región debe estar dentro del
+límite escrito (para facilitar el control, la escritura se
+"serializa"), si lo está, se cambia su valor y se devuelve
+\textit{SHMEM\_OK}, de lo contrario es devuelto
+\textit{SHMEM\_INVALID}. \\
+Las otras funciones que provee la interfaz de shared memory son:
+\begin{itemize}
+    \item \textit{shmem\_read} que dado el puntero a la estructura
+    \textit{shmem\_t}, un puntero a un buffer $b$ y un \textit{
+    unsigned char} $n$, lee de la región $n$ bytes a partir de la
+    posición actual del puntero, y los guarda en $b$. Si no
+    existen $n$ bytes para leer, se lee todo lo posible, y se
+    devuelve la cantidad de bytes leidos.
+    \item \textit{shmem\_write}, como read, toma el puntero a la
+    región de memoria, un puntero a un buffer $b$ y un \textit{
+    unsigned char} $n$, y escribe $n$ bytes de $b$ en la memoria
+    compartida. Si no hay espacio para escribir $n$ bytes,
+    escribe todo lo posible, y devuelve el número de bytes
+    escritos.
+    \item \textit{shmem\_poll} toma el puntero a \textit{
+    shmem\_t} y devuelve \textit{SHMEM\_OK} si hay algo escrito
+    más allá del puntero actual de la tarea, o \textit{SHMEM\_
+    INVALID} si no lo hay.
+    \item \textit{shmem\_block\_read} es una combinación entre
+    \textit{shmem\_read} y \textit{shmem\_poll}; si no hay nada
+    para leer en la región de memoria, se devuelve el control
+    del CPU, para volver a consultar cuando se adquiera
+    nuevamente. En cuanto haya algo para leer, se utiliza la
+    función de lectura y se retorna.
+    \item Observación: En todas las funciones mencionadas se
+    chequea que la región aún esté activa antes de realizar
+    cualquier cosa con la función \textit{shmem\_check}, si
+    no lo está, se devuelve en todos los casos la bandera
+    \textit{SHMEM\_CLOSED}.
+\end{itemize}
+
+
+\end{document}

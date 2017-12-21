@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <malloc.h>
 #include <setjmp.h>
+#include <stdio.h>
 #include "scheduler.h"
 #include "pqueue.h"
 #include "mm.h"
@@ -30,13 +31,13 @@ timer_t sched_timer_ID;
 struct itimerspec sched_time_setting = {0};
 struct itimerspec sched_stop_timer = {0};
 
-// Puntero para conocer tarea en ejecucion
+// Tarea en ejecucion
 q_elem *qelem_current = NULL;
 
-// Puntero a direccion de stack considerada inicio del sched
+// Direccion de stack considerada inicio del sched
 void *initial_rsp;
 
-// Puntero a las colas de tareas
+// Colas de tareas
 pqueue *queues;
 
 
@@ -50,7 +51,7 @@ void create_task(TaskFunc f, void *arg, Task *new)
     jmp_buf creator_buf;
     jmp_buf *jb = malloc(sizeof(jmp_buf));
     if (jb == NULL)
-        __error("create_task malloc error",24)
+        __error("create_task malloc error",24);
     new->buf = jb;
     new->st = READY;
     new->arg = arg;
@@ -66,8 +67,10 @@ void create_task(TaskFunc f, void *arg, Task *new)
     }
     else {    
         union sigval task_pointer = {.sival_ptr = new};
-        if (sigqueue(getpid(), SIG_TASK_NEW, task_pointer))
-            __error("sigqueue error",14);
+        siginfo_t inf = {.si_value = task_pointer};
+        /*if (sigqueue(getpid(), SIG_TASK_NEW, task_pointer))
+            __error("sigqueue error",14);*/
+        scheduler(SIG_TASK_NEW, &inf, NULL);
     }
     return;
 }
@@ -141,10 +144,12 @@ void scheduler(int signum, siginfo_t *data, void* extra)
 {
     static Task *current_task;
 
+
     debug2();
     /* Guardar tarea anterior y guardar checkpoint */
     if (signum != SIG_TASK_END && qelem_current != NULL) {
-        if (qelem_current -> lvl < QUEUE_NUMBER - 1)
+        if (qelem_current -> lvl < QUEUE_NUMBER - 1 &&
+            signum != SIG_TASK_NEW && data != NULL)
             qelem_current -> lvl ++;
         queue_insert(queues, qelem_current);
         current_task = (Task *) qelem_current -> data;
@@ -160,19 +165,22 @@ void scheduler(int signum, siginfo_t *data, void* extra)
         ((Task *) data -> si_value.sival_ptr) -> queued = 1;
     }
 
+    /* Incrementar prioridad de todas las tareas a la maxima */
+    
+
     /* Desencolar proxima tarea a ser ejecutada */
     while (1) {
         qelem_current = queue_pop(queues);
         current_task = (Task *) qelem_current -> data;
         current_task -> queued = 0;
         if (current_task -> st == BLOCKED)
-            free(qelem_current); // Abstraerlo a pqueue?
+            free(qelem_current);
         else
             break;
     }
 
     current_task -> st = ACTIVE;
-    sched_time_setting.it_value.tv_nsec = TIME_L(qelem_current -> lvl);
+    sched_time_setting.it_value.tv_nsec = QUANTUM(qelem_current -> lvl);
     if (timer_settime(sched_timer_ID, 0, &sched_time_setting, NULL))
         __error("Error setting timer", 19);
     ACTIVATE(current_task);
@@ -182,26 +190,27 @@ void scheduler(int signum, siginfo_t *data, void* extra)
 void start_sched(Task *maintask)
 {
 	/* Setting de timer, señales y handler */
-    sigset_t block_these;
-    if(sigfillset(&block_these))
+    sigset_t *block_these = malloc(sizeof(sigset_t));;
+    if(sigfillset(block_these))
         __error("Error in signal config", 22);
-    sigdelset(&block_these, SIG_TASK_YIELD);
-    sigdelset(&block_these, SIG_TASK_NEW);
-    sigdelset(&block_these, SIGTSTP);
-    sigdelset(&block_these, SIGKILL);
-    struct sigaction sa = {.sa_sigaction = scheduler,
-                           .sa_mask = block_these,
-                           .sa_flags = SA_SIGINFO | SA_RESTART
-                          };
-    if (sigaction(SIG_TASK_YIELD, &sa, &old_yield_sig))
+    sigdelset(block_these, SIG_TASK_YIELD);
+    sigdelset(block_these, SIG_TASK_NEW);
+    sigdelset(block_these, SIGTSTP);
+    sigdelset(block_these, SIGKILL);
+    struct sigaction *sa = malloc(sizeof(struct sigaction));
+    sa -> sa_sigaction = scheduler;
+    sa -> sa_mask = *block_these;
+    sa -> sa_flags = SA_SIGINFO | SA_RESTART | SA_NODEFER;
+    if (sigaction(SIG_TASK_YIELD, sa, &old_yield_sig))
         __error("Error setting sigaction", 23);
-    if (sigaction(SIG_TASK_NEW, &sa, &old_new_sig))
+    if (sigaction(SIG_TASK_NEW, sa, &old_new_sig))
         __error("Error setting sigaction", 23);
-    if (sigaction(SIG_TASK_END, &sa, &old_end_sig))
+    if (sigaction(SIG_TASK_END, sa, &old_end_sig))
         __error("Error setting sigaction", 23);
-    struct sigevent se = {.sigev_notify = SIGEV_SIGNAL,
-                          .sigev_signo = SIG_TASK_YIELD};
-    if (timer_create(CLOCK_REALTIME, &se, &sched_timer_ID))
+    struct sigevent *se = malloc(sizeof(struct sigevent));
+    se -> sigev_notify = SIGEV_SIGNAL;
+    se -> sigev_signo = SIG_TASK_YIELD;
+    if (timer_create(CLOCK_REALTIME, se, &sched_timer_ID))
         __error("Error creating timer", 20);
 
     /* Setting de maintask */
@@ -243,6 +252,15 @@ void sched_blocker(char act) {
     }
     return;
 }      
+
+
+void task_yield(void)
+{
+    if (timer_settime(sched_timer_ID, 0, &sched_stop_timer, NULL))
+        __error("Error disarming timer", 21);
+    scheduler(SIG_TASK_YIELD, NULL, NULL);
+}
+
 
 
 void destroy_sched(void)

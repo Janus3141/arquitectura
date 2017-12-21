@@ -2,34 +2,33 @@
 /********** Priority queues *********/
 
 #include <malloc.h>
-#include "pqueue.h"
 #include <stdlib.h>
-#include <unistd.h>
-#include "gerror.h"
+#include "pqueue.h"
+//#include "gerror.h"
 
 
 pqueue queue_create(char n)
 {
+    //if (n <= 0) __error("queue_create invalid argument",29);
     q_elem **backs = calloc(n, sizeof(q_elem *));
-    if (backs == NULL) __error("No space to allocate", 20);
+    //if (backs == NULL) __error("No space to allocate", 20);
     int *sizes = calloc(n, sizeof(char));
-    if (sizes == NULL) __error("No space to allocate", 20);
+    //if (sizes == NULL) __error("No space to allocate", 20);
     pqueue pq = {.front = NULL,
-                      .backs = backs,
-                      .size = sizes,
-                      .maxlevel = n-1};
+                 .backs = backs,
+                 .size = sizes,
+                 .maxlevel = n-1};
     return pq;
 }
 
 
 void queue_destroy(pqueue *q)
 {
-    if (q -> front != NULL) {
-        while ((q -> front) -> next != NULL) {
-            q -> front = (q -> front) -> next;
-            free((q -> front) -> prev);
-        }
-        free(q->front);
+    q_elem *helper;
+    while (q -> front != NULL) {
+        helper = q -> front;
+        q -> front = (q -> front) -> next;
+        free(helper);
     }
     free(q -> backs);
     free(q -> size);
@@ -55,8 +54,8 @@ void queue_insert(pqueue *q, q_elem *elem)
             for (char i = elem->lvl - 1; i >= 0; i--) {
                 if ((q->size)[i] != 0) {
                     elem -> next = (q->backs)[i] -> next;
-                    elem -> prev = (q->backs)[i];
                     (q->backs)[i] -> next = elem;
+                    (q->backs)[i] = elem;
                     break;
                 }
             }
@@ -64,7 +63,6 @@ void queue_insert(pqueue *q, q_elem *elem)
     }
     else {
         elem -> next = (q->backs)[elem->lvl] -> next;
-        elem -> prev = (q->backs)[elem->lvl];
         (q->backs)[elem->lvl] -> next = elem;
         (q->backs)[elem->lvl] = elem;
     }
@@ -76,19 +74,17 @@ void queue_insert(pqueue *q, q_elem *elem)
 void queue_new_node(pqueue *q, void *elem)
 {
     q_elem *new = malloc(sizeof(q_elem));
-    if (new == NULL)
-        __error("queue malloc error", 18);
+    //if (new == NULL)
+    //    __error("queue malloc error", 18);
     new -> data = elem;
     new -> lvl = 0;
     if ((q->size)[0] > 0) {
         new -> next = (q->backs)[0] -> next;
-        new -> prev = (q->backs)[0];
         (q->backs)[0] -> next = new;
         (q->backs)[0] = new;
     }
     else {
         new -> next = q -> front;
-        new -> prev = NULL;
         (q->backs)[0] = new;
         q -> front = new;
     }
@@ -103,7 +99,6 @@ q_elem *queue_pop(pqueue *q)
     if (poped != NULL) {
         (q->size)[poped->lvl]--;
         q -> front = poped -> next;
-        poped -> prev = NULL;
         poped -> next = NULL;
     }
     return poped;

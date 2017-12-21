@@ -5,75 +5,75 @@
 #include "gerror.h"
 
 
-task_mutex_arr_t *task_mutex_arr = NULL;
-int task_mutex_arr_size = 0;
+task_sp_arr_t *task_sp_arr = NULL;
+int task_sp_arr_size = 0;
 
-task_mutex_t task_mutex_manager(char act, task_mutex_t n)
+task_sp_t task_sp_manager(char act, task_sp_t n)
 {
     static int next_free_spot = 0;
     
-    /* Inicializa un nuevo mutex */
-    if (act == TASK_MUTEX_NEW) {
+    /* Inicializa un nuevo sp */
+    if (act == TASK_SP_NEW) {
         block_sched();
-        if (next_free_spot >= task_mutex_arr_size) {
-            int i = task_mutex_arr_size;
-            task_mutex_arr_size += TASK_MUTEX_SIZE_LEAP;
-            task_mutex_arr = realloc(task_mutex_arr,sizeof(task_mutex_arr_t)*task_mutex_arr_size + 1);
-            for (; i < task_mutex_arr_size; i++)
-                (task_mutex_arr[i]).state = TASK_MUTEX_UNINIT;
+        if (next_free_spot >= task_sp_arr_size) {
+            int i = task_sp_arr_size;
+            task_sp_arr_size += TASK_SP_SIZE_LEAP;
+            task_sp_arr = realloc(task_sp_arr,sizeof(task_sp_arr_t)*task_sp_arr_size + 1);
+            for (; i < task_sp_arr_size; i++)
+                (task_sp_arr[i]).state = TASK_SP_UNINIT;
         }
-        task_mutex_t result = next_free_spot;
-        (task_mutex_arr[result]).state = TASK_MUTEX_INIT;
-        (task_mutex_arr[result]).value = TASK_MUTEX_UNLOCK;
-        for (int i = 0; i <= task_mutex_arr_size; i++) {
-            if ((task_mutex_arr[i]).state == TASK_MUTEX_UNINIT)
+        task_sp_t result = next_free_spot;
+        (task_sp_arr[result]).state = TASK_SP_INIT;
+        (task_sp_arr[result]).value = TASK_SP_UNLOCK;
+        for (int i = 0; i <= task_sp_arr_size; i++) {
+            if ((task_sp_arr[i]).state == TASK_SP_UNINIT)
                 next_free_spot = i;
         }
         unblock_sched();
         return result;
     }
 
-    /* Pone al mutex dado en estado no iniciado */
-    else if (act == TASK_MUTEX_DEL) {
-        if (n >= task_mutex_arr_size)
-            __error("task mutex bad argument",23);
-        (task_mutex_arr[n]).state = TASK_MUTEX_UNINIT;
+    /* Pone al sp dado en estado no iniciado */
+    else if (act == TASK_SP_DEL) {
+        if (n >= task_sp_arr_size)
+            __error("task sp bad argument",23);
+        (task_sp_arr[n]).state = TASK_SP_UNINIT;
         if (n < next_free_spot)
             next_free_spot = n;
-        return TASK_MUTEX_OK;
+        return TASK_SP_OK;
     }
 
-    /* Libera la memoria reservada. Si se utiliza algun mutex
+    /* Libera la memoria reservada. Si se utiliza algun sp
        despues de este punto probablemente se reciba un segfault */
-    else if (act == TASK_MUTEX_DESTROY) {
-        free(task_mutex_arr);
-        return TASK_MUTEX_OK;
+    else if (act == TASK_SP_DESTROY) {
+        free(task_sp_arr);
+        return TASK_SP_OK;
     }
 }
 
 
-int task_mutex_lock(task_mutex_t n)
+int task_sp_lock(task_sp_t n)
 {
-    int own_key = TASK_MUTEX_LOCK;
+    int own_key = TASK_SP_LOCK;
     while (1) {
-        asm("movq $0, %%r12\n"
+        asm("movq %1, %%r12\n"
             "xchg %%r12, %0\n"
             "movq %%r12, %1"
-            : "=m" ((task_mutex_arr[n]).value), "=m" (own_key));
-        if ((task_mutex_arr[n]).state != TASK_MUTEX_INIT)
-            return TASK_MUTEX_FAIL;
-        else if (own_key == TASK_MUTEX_LOCK)
+            : "=m" ((task_sp_arr[n]).value), "=m" (own_key));
+        if ((task_sp_arr[n]).state != TASK_SP_INIT)
+            return TASK_SP_FAIL;
+        else if (own_key == TASK_SP_LOCK)
             task_yield();
-        else if (own_key == TASK_MUTEX_UNLOCK)
+        else if (own_key == TASK_SP_UNLOCK)
             break;
     }
-    return TASK_MUTEX_OK;
+    return TASK_SP_OK;
 }
 
 
-void task_mutex_unlock(task_mutex_t n)
+void task_sp_unlock(task_sp_t n)
 {
-    (task_mutex_arr[n]).value = TASK_MUTEX_UNLOCK;
+    (task_sp_arr[n]).value = TASK_SP_UNLOCK;
     return;
 }
 
