@@ -6,6 +6,7 @@
 
 #include <setjmp.h>
 #include <signal.h>
+#include <poll.h>
 
 
 /********** Definiciones de tipos **********/
@@ -41,6 +42,21 @@ typedef struct {
 /* Tiempo de procesador que obtendra la tarea en funcion de su nivel */
 #define QUANTUM(x) (TICK*MS*(1<<(x)))
 
+/* Definen cada cuanto tiempo se levanta la prioridad de todas las tareas */
+#define SCHED_LIFT_SECS 0
+#define SCHED_LIFT_NSECS (500*MS)
+
+/* Tiempo que dura en ejecucion la tarea 'idle' */
+#define SCHED_IDLETASK_NSECS (1*MS)
+
+#define MEM_TASK_SIZE 2000 /* Cantidad de bytes de stack por tarea */
+#define MEM_TASKS_PER_SEG 10 /* 10 task por cada segmento de stack */
+
+/* Flags de memory_manager */
+#define MM_TAKE 1
+#define MM_RELEASE 0
+#define MM_DESTROY 2
+
 /* Macros para controlar apropiacion */
 #define ACTIVATE(d) (longjmp(*((d)->buf),1))
 #define YIELD(o) ( ({ if(setjmp(*((o)->buf))){return;} }) )
@@ -51,8 +67,22 @@ typedef struct {
 #define unblock_sched() (sched_blocker(1))
 
 
+/*** Abstracciones de memory_manager ***/
+
+/* void *take_stack(void); */
+#define take_stack() memory_manager(NULL,MM_TAKE)
+
+/* void release_stack(Task *); */
+#define release_stack(t) memory_manager((t)->mem_position,MM_RELEASE)
+
+/* void destroy_stack(void) */
+#define destroy_stack() memory_manager(NULL,MM_DESTROY)
+
+
 
 /********** Prototipos **********/
+
+void *memory_manager(void *, char);
 
 void create_task(TaskFunc, void *, Task *);
 
@@ -64,6 +94,8 @@ void block_task(Task *);
 
 void unblock_task(Task *);
 
+int task_poll(struct pollfd *, nfds_t);
+
 void start_sched(Task *);
 
 void task_yield(void);
@@ -73,6 +105,12 @@ void sched_blocker(char);
 void scheduler(int, siginfo_t *, void *);
 
 void destroy_sched(void);
+
+void idle_task(void);
+
+Task *task_current(void);
+
+void task_state(Task_State);
 
 
 #endif //__SCHED_H

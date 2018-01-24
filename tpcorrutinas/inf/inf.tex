@@ -4,7 +4,7 @@
 \usepackage{graphicx}
 \usepackage{float}
 \renewcommand{\baselinestretch}{1}
-\usepackage[margin=4cm]{geometry}
+\usepackage[margin=3.5cm]{geometry}
 \usepackage{proof}
 \usepackage{amssymb}
 \usepackage{listings}
@@ -18,12 +18,11 @@
 \lhead{Corrutinas avanzadas}
 \rhead{Bruno Sotelo}
 
-\newcommand{\bind}{\gg\!\!=}
-
 \setlength{\parindent}{0in}
 
 \begin{document}
 
+\raggedright
 
 \begin{titlepage}
 \centering
@@ -125,44 +124,59 @@ las cuales indicarán a este handler que la tarea activa le "devuelve"
 el procesador, que se crea una nueva tarea y que la tarea activa
 termina y no se le debe dar el procesador nuevamente, respectivamente.
 Se utilizan señales real-time ya que poseen más beneficios que las
-señales de POSIX-1. Luego se crea un nuevo timer,
-\textit{sched\_timer\_ID} que controlará el tiempo de ejecución que se
-le cede a una tarea; el scheduler pone en marcha este timer antes
-de poner la tarea en ejecución, y al llegar el timer a 0 mandará
-una señal \textit{SIG\_TASK\_YIELD} que lo pondrá de nuevo en marcha
-para continuar otra tarea. \\
+señales de POSIX-1. Luego se crean tres timers:
+\begin{description}
+    \item[sched\_yield\_timer]Que controlará el tiempo de ejecución que se
+    le cede a una tarea; el scheduler pone en marcha este timer antes
+    de poner la tarea en ejecución, y al llegar el timer a 0 mandará
+    una señal \textit{SIG\_TASK\_YIELD} que lo pondrá de nuevo en marcha
+    para continuar otra tarea.
+    \item[sched\_lift\_timer] Que indica cada cu\'anto tiempo se llevan
+    todas las tareas a la cola de mayor prioridad, lo cual evita el
+    starving en las colas de menor prioridad. Est\'a parametrizado por
+    \textit{SCHED\_LIFT\_SECS} y \textit{SCHED\_LIFT\_NSECS}. Este timer
+    no manda señales sino que es revisado en cada ejecuci\'on del
+    scheduler.
+    \item[sched\_idletask\_timer] Especifica el tiempo que toma la tarea
+    'idle' cuando es ejecutada. Es una tarea ociosa, fue definida para
+    los casos en que no quedan tareas por ejecutar en cola. Esta tarea
+    se ejecutar\'a por \textit{SCHED\_IDLETASK\_NSECS} segundos.
+\end{description}
 Lo siguiente en \textit{start\_sched} es setear los valores de la
-estructura \textit{maintask}. el miembro \textit{mem\_position} es
+estructura \textit{maintask}. El miembro \textit{mem\_position} es
 iniciado con la función \textit{take\_stack}, esta es en realidad una
-macro definida en \textit{mm.h} que abstrae a \textit{memory\_manager},
+macro definida que abstrae a \textit{memory\_manager},
 la cual controla los segmentos de stack que posee cada tarea. Puede
 entregar a una nueva tarea un puntero al próximo segmento libre (que
 ninguna otra está usando) o una tarea puede indicarle que no utilizará
 más su segmento con la macro \textit{release\_stack}, y el manager lo
 marcará como libre para cederlo a otra tarea. El tamaño de uno de
-estos segmentos está parametrizado con la macro \textit{MEM\_TASK\_SIZE}
-en \textit{mm.h}, y también puede modificarse allí la cantidad de
-espacio que reservará el manager en caso de quedarse sin con la
-macro \textit{MEM\_TASKS\_PER\_SEG} (esta mención de segmento es
-diferente a la anterior, en este caso un segmento contiene varias
-tareas), el objetivo de esto es amortizar el costo de reservar espacio
-en heap al hacerlo para más de una tarea a la vez. \\
+estos segmentos está parametrizado con la macro \textit{MEM\_TASK\_SIZE}\\
 Lo que sigue es crear la cola de tareas del scheduler. También está
 parametrizada la cantidad de colas (prioridades) que se utilizarán
 con la macro \textit{QUEUE\_NUMBER}. Observar que puede crearse un
-scheduler Round Robin si se define $QUEUE\_NUMBER = 1$. Finalmente
+scheduler Round Robin si se define \textit{QUEUE\_NUMBER = 1}. Finalmente
 se pone un checkpoint en el lugar con la macro \textit{YIELD},
-básicamente una llamada a \textit{setjmp}, y se llama al scheduler. \\
+básicamente una llamada a \textit{setjmp}, y se llama al scheduler.\\
 El funcionamiento del scheduler en general es como sigue:
 \begin{enumerate}
-    \item Si la señal no es \textit{SIG\_TASK\_END} y
+    \item El primer paso es desencolar la pr\'oxima tarea a ejecutar.
+    Si primero se encola la tarea que se estaba ejecutando, es probable
+    que esa tarea tenga una alta prioridad, y vuelva a ser elegida por
+    el scheduler, lo que llevar\'ia a un starving de las dem\'as tareas.
+    Esto hace necesaria la existencia de la tarea 'idle', ya que puede
+    suceder que no haya otra tarea en cola, y no habr\'ia nada que
+    ejecutar luego. Cuando se desencola una tarea, se debe asegurar que
+    no est\'e bloqueada. Luego se explicar\'a el mecanismo de bloqueo.
+    \item Si la señal que llega no es \textit{SIG\_TASK\_END} y
     \textit{qelem\_current} no es \textit{NULL}, la tarea que estaba
     en ejecución se guardará nuevamente en la cola de tareas listas
     y se hará un checkpoint (\textit{YIELD}) al cual volver cuando
     el scheduler elija otra vez esta tarea, y que implica retornar
     del handler para continuar la ejecución que se estaba dando.
     Observar que la segunda condición será falsa sólo en la primera
-    llamada a \textit{scheduler}. En cuanto a la primera, su razón es
+    llamada a \textit{scheduler}, y al finalizar una ejecuci\'on de
+    la tarea 'idle'. En cuanto a la primera, su razón es
     que esa señal sólo será enviada por una tarea al terminar a
     través de la función \textit{stop\_task}, con la macro
     \textit{FINALIZE}, por lo cual no se le debe entregar otra
@@ -177,7 +191,7 @@ El funcionamiento del scheduler en general es como sigue:
     alguna otra condición se cumpla para seguir su ejecución,
     entonces se deja a la tarea en su prioridad actual.
     \item Si la señal que llegó es \textit{SIG\_TASK\_NEW}, se deberá
-    introducir en la cola de espera, al final de la prioridad 0, la
+    introducir, al final de la cola de espera de mayor priorida, la
     nueva tarea. Su puntero (\textit{Task *}) se pasa como argumento
     en \textit{data -> si\_value.sival\_ptr}.
     \item Cada cierto tiempo es prudente subir la prioridad de todas
@@ -186,10 +200,8 @@ El funcionamiento del scheduler en general es como sigue:
     que se adapte mejor a los comportamientos de las tareas. La
     acción se encuentra implementada como parte de la estructura
     \textit{pqueue} con la función \textit{queue\_lift}.
-    \item Luego se debe tomar la próxima tarea a ser ejecutada de la
-    cola de espera con \textit{queue\_pop}. Al hacerlo se debe
-    asegurar que la tarea no fue bloqueada. Luego se explicará el
-    mecanismo de bloqueo.
+    \item Si la tarea desencolada es un puntero \textit{NULL}, es porque
+    la cola estaba vac\'ia. En este caso se activar\'a la tarea 'idle'.
     \item Finalmente se configura el estado de la tarea elegida en
     \textit{ACTIVE}, se calcula la cantidad de quantums que podrá
     usar para correr, se activa el timer con ese valor y se activa
@@ -200,29 +212,24 @@ El funcionamiento del scheduler en general es como sigue:
     En este caso la función de quantums es, como es recomendado,
     exponencial en función del nivel de tarea.
 \end{enumerate}
+
+\begin{figure}[H]
+    \begin{center}
+        \includegraphics[width=15cm,height=10cm]{state_flow.png}
+        Flujo de estado de las tareas
+    \end{center}
+\end{figure}
+
 Sobre el bloqueo de tareas: Si una tarea necesita bloquear a otra
 debe utilizar la función \textit{block\_task}, la cual, dado un
 puntero a la tarea a bloquear, simplemente cambia el estado de esa
-tarea a \textit{BLOCKED}, siempre que el estado anterior sea
-\textit{READY}, ya que no tendría sentido cambiar el estado de una
-tarea \textit{ZOMBIE}, y no se debería bloquear con esta función
-a la tarea con estado \textit{ACTIVE}, ya que implicaría que una
-tarea se está bloqueando a sí misma. Si la tarea se bloquea a sí
-misma por este medio, no tendrá forma de desbloquearse luego si
-no lo hace otra tarea, y quedará en starvation. Si una tarea
-necesita esperar a una condición debería esperar en un loop donde,
-si la condición aún no es verdadera, devuelve el control de CPU
-al scheduler mediante \textit{task\_yield}, y, cuando obtenga
-nuevamente el procesador, volver a evaluar la condición. \\
-Cuando una tarea es bloqueada, si fue iniciada con
-\textit{create\_task} entonces en ese momento debe estar en la cola
-de espera de tareas, y seguirá allí hasta que el scheduler la
-elija para entregarle tiempo de CPU. Si cuando el scheduler
-desencola la tarea esta tiene estado \textit{BLOCKED}, procederá
-a eliminar el qelem correspondiente (no la tarea) y a
-desencolar otra tarea que no esté bloqueada. En algún momento
-la tarea que la bloqueó, la desbloqueará, y para ello utilizará
-\textit{unblock\_task}. La función le devuelve el estado
+tarea a \textit{BLOCKED}, siempre que el estado anterior no sea
+\textit{ZOMBIE}. La tarea eventualmente ser\'a desencolada para ponerla
+en ejecuci\'on. Cuando esto sucede, si la tarea tiene estado
+\textit{BLOCKED}, procederá a eliminar el qelem correspondiente
+(no la tarea) y a desencolar otra tarea que no esté bloqueada.\\
+Para desbloquear una tarea se utiliza \textit{unblock\_task}.
+La función le devuelve el estado
 \textit{READY} y diferencia entre dos casos: la tarea está en la
 cola de espera o no; si lo está, no necesita hacer nada más, el
 scheduler le entregará el procesador como si nada hubiera
@@ -231,55 +238,72 @@ en la cola que contenga a esta tarea, el scheduler lo hará al
 enviársela como si fuera una recién creada, y se la coloca con
 prioridad 0 en la cola.
 
+
 \section{Locks}
 Los locks se encuentran implementados en \textit{locks.c}, en forma
-de spinlocks (por lo cual se los nombra \textit{sp}). Para crear,
-borrar o destruir un lock se utiliza \textit{task\_sp\_manager}, a
-través de las macros \textit{task\_sp\_init},\textit{task\_sp\_remove}
-y \textit{task\_sp\_destroy\_all}, respectivamente. Para saber si un
-lock es utilizable o no, en la estructura \textit{task\_sp\_arr\_t}
-se guarda un campo donde se lo indica: si es
-\textit{TASK\_SP\_INIT} entonces se puede usar, de lo contrario es
-\textit{TASK\_SP\_UNINIT}. El otro campo de la estructura es un
-entero que representa el valor del lock; una tarea debe tomarlo y
-verificar que el valor sea \textit{TASK\_SP\_UNLOCK} para continuar
-su ejecución, de lo contrario el valor es \textit{TASK\_SP\_LOCK}
-y la tarea debe bloquearse para intentar tomar el lock nuevamente más
-tarde. Para tomar un lock se debe utilizar \textit{task\_sp\_lock},
-que crea una llave con valor \textit{TASK\_SP\_LOCK} para la tarea y
-la intercambia con la llave del lock atómicamente por medio de la
-instrucción \textit{xchg}. Si el lock no estaba iniciado, será
-devuelto un código de error \textit{TASK\_SP\_FAIL}, de lo contrario
-todo salió bien y se devuelve \textit{TASK\_SP\_OK}. Una vez pasada
-la región crítica protegida por el lock, la tarea debería llamar a
-\textit{task\_sp\_unlock} para dejar que otras tareas puedan tomarlo.
+de spinlocks (por lo cual se los nombra \textit{sp}). Los lock tienen
+por tipo \textit{task\_sp\_t}, un sin\'onimo para \textit{long long},
+y pueden tener dos valores, \textit{TASK\_SP\_LOCK} o 
+\textit{TASK\_SP\_UNLOCK}. Para crear un lock simplemente se declara una
+variable \textit{task\_sp\_t} con el valor \textit{TASK\_SP\_INIT}. Una
+tarea pide un lock con \textit{task\_sp\_lock} pasando el puntero a la
+variable declarada, y luego lo suelta llamando a
+\textit{task\_sp\_unlock}.\\
+El algoritmo para adquirir un lock se basa en la instrucci\'on de x86\_64
+\textit{xchg}, la cual intercambia dos variables at\'omicamente. En la
+funci\'on para adquirir el lock, primero se declara una variable con
+valor \textit{TASK\_SP\_LOCK}, para intercambiarla luego con el lock
+argumento, mediante \textit{xchg}. Entonces se prueba el valor de la
+variable local, si sigue siendo \textit{TASK\_SP\_LOCK} es porque el
+lock est\'a tomado, entonces se suelta el procesador para volver a
+probar suerte en la pr\'oxima ejecuci\'on; si en cambio el valor ahora
+es \textit{TASK\_SP\_UNLOCK}, es porque se adquiri\'o el lock, entonces
+se puede empezar a trabajar en la secci\'on cr\'itica. Para soltar un
+lock, s\'olo se le debe devolver el valor \textit{TASK\_SP\_UNLOCK}. \\
+Este tipo de lock sufre algunas desventajas:
+\begin{itemize}
+    \item Pueden darse casos de starvation cuando una tarea no llega
+    a tomar un lock. Esto se debe a que no existe un orden al pedirlo,
+    las tareas se encuentran en condici\'on de carrera.
+    \item Si una tarea mantiene el lock por un tiempo prolongado, se
+    genera una p\'erdida de rendimiento debido a la gran cantidad de
+    cambios de contextos innecesarios generados por la espera activa
+    en la toma del lock.
+\end{itemize}
+Ambos problemas pueden ser solucionados agregando colas a la
+implementaci\'on de estos locks. Si una tarea no consigue el lock al
+intercambiar variables, no seguir\'a intentando conseguirlo activamente,
+sino que pasar\'a a bloquearse y esperar en una cola hasta que el actual
+dueño del lock lo suelte, y llame al primero en la cola. Esto se
+encuentra implementado en los archivos \textit{locks2.c} y
+\textit{locks2.h}. Se debe mencionar que tampoco son infalibles ya que
+generan tambi\'en una ca\'ida de rendimiento cuando los tiempos de
+retenci\'on de locks son muy cortos.
 
 \section{Comunicación}
 La comunicación entre procesos se realiza mediante shared memory, y
-está implementada en \textit{mm.c}. Para comenzar a utilizar un área
+está implementada en \textit{shmem.c}. Para comenzar a utilizar un área
 o región de memoria compartida, la tarea debe iniciar una conexión
 usando \textit{shmem\_new} y dando el nombre del área (un caracter,
 lo cual limita el número de áreas a 127). Esta función es una macro
 que abstrae al manejador de memoria compartida
 \textit{shmem\_region\_manager}, el cual puede crear o remover
-regiones. \textit{shmem\_new} devuelve un puntero a una estructura
-\textit{shmem\_t}, que podrá ser utilizado como argumento para las
-funciones de interfaz de shared memory (la estructura es opaca para
-el usuario). \\
+regiones. \textit{shmem\_new} devuelve una estructura
+\textit{shmem\_t}, que ser\'a utilizada como argumento para las
+funciones de interfaz de shared memory. \\
 El tamaño de una región de memoria compartida está parametrizado
-por la macro \textit{SHMEM\_REGION\_SIZE}. Aquí se utilizan 254
+por la macro \textit{SHMEM\_REGION\_SIZE}. Aquí se utilizan 255
 bytes por región de memoria. \\
 La estructura \textit{shmem\_t} contiene un puntero (*) a la región
 de memoria compartida y un entero que representa el puntero de la
 tarea sobre esa región. Cada región puede ser accedida por
-cualquier cantidad de tareas (no concurrentemente), y cada tarea
+cualquier cantidad de tareas, y cada tarea
 debería iniciar su propia conexión a la región, ya que así tendrá
-su puntero sobre ella. Este puntero funciona de manera similar a
-los punteros de archivos: si se leen 5 bytes de la región, el
+su puntero sobre ella. Este puntero funciona de manera similar al
+que utilizan los archivos: si se leen 5 bytes de la región, el
 puntero sumará 5 para que la tarea continue leyendo desde el punto
 en que paró. Si se escriben 5 bytes, se los escribe a partir de la
-posición actual del puntero (como sucede en un archivo abierto en
-modo \textit{append}), y este se deja en el próximo byte a
+posición actual del puntero, y este se deja en el próximo byte a
 escribir. También se puede cambiar la posición del puntero con la
 función \textit{shmem\_seek}; esta toma como argumentos un 
 \textit{shmem\_t *}, un \textit{unsigned char} que es la posición
@@ -290,9 +314,6 @@ de puntero deseada, y un \textit{char} que puede ser:
     \item \textit{SEEK\_OFFSET}, con el cual la posición indicada
     es relativa a la posición actual del puntero (se suma el
     argumento a la posición).
-    \item \textit{SEEK\_REV\_OFFSET}, que es similar a
-    \textit{SEEK\_OFFSET}, sólo que el argumento es restado a la
-    posición actual.
 \end{itemize}
 La nueva posición del puntero a la región debe estar dentro del
 límite escrito (para facilitar el control, la escritura se
@@ -306,7 +327,7 @@ Las otras funciones que provee la interfaz de shared memory son:
     unsigned char} $n$, lee de la región $n$ bytes a partir de la
     posición actual del puntero, y los guarda en $b$. Si no
     existen $n$ bytes para leer, se lee todo lo posible, y se
-    devuelve la cantidad de bytes leidos.
+    devuelve la cantidad de bytes le\'idos.
     \item \textit{shmem\_write}, como read, toma el puntero a la
     región de memoria, un puntero a un buffer $b$ y un \textit{
     unsigned char} $n$, y escribe $n$ bytes de $b$ en la memoria
@@ -320,7 +341,7 @@ Las otras funciones que provee la interfaz de shared memory son:
     \item \textit{shmem\_block\_read} es una combinación entre
     \textit{shmem\_read} y \textit{shmem\_poll}; si no hay nada
     para leer en la región de memoria, se devuelve el control
-    del CPU, para volver a consultar cuando se adquiera
+    al CPU, para volver a consultar cuando se adquiera
     nuevamente. En cuanto haya algo para leer, se utiliza la
     función de lectura y se retorna.
     \item Observación: En todas las funciones mencionadas se
@@ -328,6 +349,16 @@ Las otras funciones que provee la interfaz de shared memory son:
     cualquier cosa con la función \textit{shmem\_check}, si
     no lo está, se devuelve en todos los casos la bandera
     \textit{SHMEM\_CLOSED}.
+\end{itemize}
+
+
+\section*{Bibliograf\'ia consultada}
+\begin{itemize}
+    \item Andrew S. Tanenbaum. \textit{Modern Operating Systems, third edition}. 2009.
+    \item Gunnar Wolf, Esteban Ruiz, Federico Bergero, Erwin Meza.
+    \textit{Fundamentos de Sistemas Operativos, primera edici\'on}. 2015.
+    \item Remzi H. Arpaci-Dusseau, Andrea C. Arpaci-Dusseau. \textit{Operating Systems:
+    Three Easy Pieces}. 2015. 
 \end{itemize}
 
 

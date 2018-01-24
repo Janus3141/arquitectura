@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <malloc.h>
+#include <poll.h>
 
 #define check_print(l,s) (write(STDOUT_FILENO, "check: "l"\n", 8+s))
 
@@ -16,7 +17,7 @@ void *f1(void *a)
         for (char a = 'a'; a <= 'z'; a++) {
             for (char i = 0; i < 100; i++)
                 thearray[i] = a;
-            if (counter % 100000 == 0) {
+            if (counter % 1000000 == 0) {
                 check_print("f1",2);
                 counter = 0;
             }
@@ -36,7 +37,7 @@ void *f2(void *a)
         for (char a = 'a'; a <= 'z'; a++) {
             for (char i = 0; i < 100; i++)
                 thearray[i] = a;
-            if (counter % 100000 == 0) {
+            if (counter % 1000000 == 0) {
                 check_print("f2",2);
                 counter = 0;
             }
@@ -54,20 +55,17 @@ int main(void)
     char f2arg[] = "f2arg\n";
     create_task(f1, NULL, &f1t);
     create_task(f2, f2arg, &f2t);
-    //block_sched();
-    char thearray[100];
-    long long counter = 0;
-    //unblock_sched();
-    while (1) {
-        for (char a = 'a'; a <= 'z'; a++) {
-            for (char i = 0; i < 100; i++)
-                thearray[i] = a;
-            if (counter % 100000 == 0) {
-                check_print("main",4);
-                counter = 0;
-            }
-            counter++;
+    char buffer[100];
+    while (1)
+    {
+        struct pollfd pfd = {.fd = STDOUT_FILENO,
+                             .events = POLLIN};
+        if (task_poll(&pfd, 1) && pfd.revents & POLLIN) {
+            ssize_t hm = read(STDOUT_FILENO, buffer, 100);
+            write(STDOUT_FILENO, buffer, hm);
         }
+        else
+            write(STDOUT_FILENO, "Poll error detected", 19);
     }
     return 0;
 }

@@ -4,20 +4,22 @@
 #include <malloc.h>
 #include <stdlib.h>
 #include "pqueue.h"
-//#include "gerror.h"
+#include "gerror.h"
 
 
-pqueue queue_create(char n)
+pqueue *queue_create(char n)
 {
-    //if (n <= 0) __error("queue_create invalid argument",29);
+    if (n <= 0) __error("queue_create invalid argument",29);
+    pqueue *pq = malloc(sizeof(pqueue));
+    if (pq == NULL) __error("pqueue malloc error", 19);
     q_elem **backs = calloc(n, sizeof(q_elem *));
-    //if (backs == NULL) __error("No space to allocate", 20);
+    if (backs == NULL) __error("pqueue malloc error", 19);
     int *sizes = calloc(n, sizeof(char));
-    //if (sizes == NULL) __error("No space to allocate", 20);
-    pqueue pq = {.front = NULL,
-                 .backs = backs,
-                 .size = sizes,
-                 .maxlevel = n-1};
+    if (sizes == NULL) __error("pqueue malloc error", 19);
+    pq -> front = NULL;
+    pq -> backs = backs;
+    pq -> size = sizes;
+    pq -> maxlevel = n-1;
     return pq;
 }
 
@@ -32,6 +34,7 @@ void queue_destroy(pqueue *q)
     }
     free(q -> backs);
     free(q -> size);
+    free(q);
     return;
 }
 
@@ -74,8 +77,8 @@ void queue_insert(pqueue *q, q_elem *elem)
 void queue_new_node(pqueue *q, void *elem)
 {
     q_elem *new = malloc(sizeof(q_elem));
-    //if (new == NULL)
-    //    __error("queue malloc error", 18);
+    if (new == NULL)
+        __error("queue malloc error", 18);
     new -> data = elem;
     new -> lvl = 0;
     if ((q->size)[0] > 0) {
@@ -107,6 +110,14 @@ q_elem *queue_pop(pqueue *q)
 
 void queue_lift(pqueue *q)
 {
+    int total_size = 0;
+    for (int i = 0; i <= q->maxlevel; i++) {
+        total_size += (q->size)[i];
+        (q->size)[i] = 0;
+    }
+    if (total_size <= 0)
+        return;
+    (q->size)[0] = total_size;
     q_elem *iter = q->front;
     while (iter->next != NULL) {
         iter->lvl = 0;
@@ -118,4 +129,6 @@ void queue_lift(pqueue *q)
         (q->backs)[i] = NULL;
     return;
 }
+
+
 

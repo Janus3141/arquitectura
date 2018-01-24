@@ -1,5 +1,5 @@
 
-#include "source/scheduler.h"
+#include "src/scheduler.h"
 #include <unistd.h>
 #include <time.h>
 #include <stdio.h>
@@ -21,8 +21,7 @@ void *f1(void *a)
             counter++;
         }
     }
-    char *result = malloc((size_t) 10);
-    result = "result\n";
+    char *result = "result\n";
     return result;
 }
 
@@ -66,10 +65,8 @@ int main(void)
     }
     void *f1res = join_task(&f1t);
     write(STDOUT_FILENO, (char *) f1res, 7);
-    // free(f1res); // Termina en segfault !!
     join_task(&f2t);
     destroy_sched();
-    check_print("sched destroyed",15);
     return 0;
 }
 

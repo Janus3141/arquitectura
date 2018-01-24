@@ -25,8 +25,8 @@ typedef struct {
 } pqueue;
 
 
-/* Devuelve la cola vacia */
-pqueue queue_create(char);
+/* Dado un numero de niveles que soportara, devuelve la cola vacia */
+pqueue *queue_create(char);
 
 /* Destruye la cola y todo su contenido */
 void queue_destroy(pqueue *);
