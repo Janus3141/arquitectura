@@ -3,32 +3,25 @@
 #include "locks.h"
 #include <stdio.h>
 
-#include <unistd.h>
-
-#define debug(n) (write(STDOUT_FILENO,"debug "n"\n",8))
-
 
 void task_sp_lock(task_sp_t *n)
 {
     task_sp_t own_key = TASK_SP_LOCK;
     while (1) {
-        //asm("mfence");
-        asm("xchgq %0, %1"
+        asm("mfence\n"
+            "xchgq %0, %1\n"
             : "+r" (*n), "+r" (own_key));
         if (own_key == TASK_SP_LOCK)
             task_yield();
-        else if (own_key == TASK_SP_UNLOCK) {
-            //debug("a");
-            break;
-        }
+        else if (own_key == TASK_SP_UNLOCK)
+            return;
     }
-    return;
 }
 
 
 void task_sp_unlock(task_sp_t *n)
 {
-    //debug("b");
+    asm("mfence");
     *n = TASK_SP_UNLOCK;
     return;
 }

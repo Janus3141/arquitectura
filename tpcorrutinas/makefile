@@ -1,8 +1,6 @@
 
 .RECIPEPREFIX = >
 
-# all: example
-
 
 ex1: scheduler.o pqueue.o shmem.o locks.o gerror.o
 > gcc sched_example.c src/scheduler.o src/pqueue.o src/shmem.o src/locks.o src/gerror.o -lrt -g -o sched_example
@@ -37,6 +35,7 @@ locks.o: src/locks.c
 
 gerror.o: src/gerror.c
 > gcc -g -c src/gerror.c -o src/gerror.o
+
 
 clean:
 > rm sched_example src/scheduler.o src/pqueue.o src/shmem.o src/locks.o src/gerror.o
