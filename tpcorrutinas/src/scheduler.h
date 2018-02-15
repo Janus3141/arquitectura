@@ -4,7 +4,6 @@
 #ifndef __SCHED_H
 #define __SCHED_H
 
-#include <setjmp.h>
 #include <signal.h>
 #include <poll.h>
 
@@ -16,7 +15,7 @@ typedef enum {ACTIVE, READY, BLOCKED, ZOMBIE} Task_State;
 typedef void *(*TaskFunc)(void *);
 
 typedef struct {
-    jmp_buf *buf;
+    char *context;
     Task_State st;
     void *arg; // Argumento pasado a la funcion
     TaskFunc fun; // Funcion que ejecutara la tarea
@@ -24,6 +23,9 @@ typedef struct {
     char queued:1; // 1 si esta en cola de tareas listas
     void *mem_position; //Posicion inicial de la tarea en el stack
 } Task;
+
+
+typedef long long task_sp_t;
 
 
 
@@ -57,12 +59,20 @@ typedef struct {
 #define MM_RELEASE 0
 #define MM_DESTROY 2
 
+/* Tamaño del buffer (context) de una tarea.
+   Depende de la implementacion en jmp.s */
+#define CONTEXT_S 136
+
 /* Macros para controlar apropiacion */
-#define ACTIVATE(d) (longjmp(*((d)->buf),1))
-#define YIELD(o) ( ({ if(setjmp(*((o)->buf))){return;} }) )
+#define ACTIVATE(d) (longjmp2((d)->context,1))
+#define YIELD(o) ( ({ if(setjmp2((o)->context)){return;} }) )
 #define FINALIZE(t) (scheduler(SIG_TASK_END,NULL,NULL))
 
-/* Abstraccion del bloqueador de scheduler */
+/* Inicializador para locks */
+#define TASK_SP_INIT 1
+
+
+/*** Abstracciones del bloqueador de scheduler ***/
 #define block_sched() (sched_blocker(0))
 #define unblock_sched() (sched_blocker(1))
 
@@ -81,6 +91,10 @@ typedef struct {
 
 
 /********** Prototipos **********/
+
+int setjmp2(char *);
+
+int longjmp2(char *, int);
 
 void *memory_manager(void *, char);
 
@@ -111,6 +125,10 @@ void idle_task(void);
 Task *task_current(void);
 
 void task_state(Task_State);
+
+void task_sp_lock(task_sp_t *);
+
+void task_sp_unlock(task_sp_t *);
 
 
 #endif //__SCHED_H

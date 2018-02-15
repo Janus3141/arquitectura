@@ -14,7 +14,9 @@ typedef long long task_sp_t;
 #define TASK_SP_LOCK 0
 #define TASK_SP_UNLOCK 1
 
-#define TASK_SP_INIT TASK_SP_UNLOCK
+//#define TASK_SP_INIT TASK_SP_UNLOCK
+
+#define TASK_SP_INIT 1
 
 void task_sp_lock(task_sp_t *);
 

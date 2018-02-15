@@ -1,6 +1,8 @@
+#define _GNU_SOURCE
+#include <stdlib.h>
+#include <sched.h>
 
 #include "src/scheduler.h"
-#include "src/locks.h"
 #include <unistd.h>
 #include <time.h>
 #include <stdio.h>
@@ -42,19 +44,25 @@ void *f2(void *a)
 
 int main(void)
 {
+    /*
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    CPU_SET(0,&set);
+    sched_setaffinity(getpid(),sizeof(set),&set);
+    */
     Task maint, f1t, f2t, f3t, f4t;
     start_sched(&maint);
-    create_task(f1, NULL, &f1t);
+    /*create_task(f1, NULL, &f1t);
     create_task(f1, NULL, &f2t);
     join_task(&f1t);
-    join_task(&f2t);
-    printf("Counter is %d\n", counter);
+    join_task(&f2t);*/
+    //printf("Counter is %d\n", counter);
     create_task(f2, NULL, &f3t);
     create_task(f2, NULL, &f4t);
     join_task(&f3t);
     join_task(&f4t);
-    destroy_sched();
-    check_print("sched destroyed",15);
+    //destroy_sched();
+    //check_print("sched destroyed",15);
     printf("Counter2 is %d\n", counter2);
     return 0;
 }

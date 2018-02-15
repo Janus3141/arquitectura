@@ -113,10 +113,10 @@ void create_task(TaskFunc f, void *arg, Task *new)
     jmp_buf creator_buf;
 
     /* Preparacion de la nueva tarea */
-    jmp_buf *created_buf = malloc(sizeof(jmp_buf));
-    if (created_buf == NULL)
+    char *context = malloc(CONTEXT_S);
+    if (context == NULL)
         __error("create_task malloc error",24);
-    new -> buf = created_buf;
+    new -> context = context;
     new -> st = READY;
     new -> arg = arg;
     new -> fun = f;
@@ -152,13 +152,15 @@ void _start_task(Task *new, jmp_buf *b)
 {
     /* Solo para ser llamada por create_task() */
 
+    /* Par evitar perder el puntero new al hacer longjmp
+       lo guardo en r15 (callee saved) */
     asm("movq %0, %%r15\n"
         :
         : "g" (new));
 
     /* Se coloca un checkpoint en new->buf, el scheduler llamara
-       a esta funcion volviendo con longjmp a ese buffer. */
-    if (setjmp(*(new->buf)) == 0) {
+       a esta funcion volviendo con longjmp a ese buffer */
+    if (setjmp2(new->context) == 0) {
         longjmp(*b,1);
     }
     else {
@@ -182,7 +184,7 @@ void stop_task(Task *r)
        mejor poner como resultado NULL */
     if (r->st != ZOMBIE)
         r->res = NULL;
-    free(r->buf);
+    free(r->context);
     release_stack(r);
     /* FINALIZE llama al scheduler y le informa que no debe
        reencolar esta tarea */
@@ -354,8 +356,8 @@ void start_sched(Task *maintask)
     sched_idletask_timespec.it_value.tv_nsec = SCHED_IDLETASK_NSECS;
 
     /* Setting de maintask */
-    jmp_buf *jb = malloc(sizeof(jmp_buf));
-    maintask -> buf = jb;
+    char *context = malloc(CONTEXT_S);
+    maintask -> context = context;
     maintask -> st = ACTIVE;
     maintask -> arg = NULL;
     maintask -> fun = NULL;
