@@ -138,7 +138,7 @@ void create_task(TaskFunc f, void *arg, Task *new)
         union sigval task_pointer = {.sival_ptr = new};
         siginfo_t inf = {.si_value = task_pointer};
         /* En este punto se puede enviar una señal o llamar directamente
-           a scheduler, lo cual es mas seguro */
+           a scheduler, lo ultimo es mas seguro */
         /*if (sigqueue(getpid(), SIG_TASK_NEW, task_pointer))
             __error("sigqueue error",14);*/
         scheduler(SIG_TASK_NEW, &inf, NULL);
@@ -152,8 +152,8 @@ void _start_task(Task *new, jmp_buf *b)
 {
     /* Solo para ser llamada por create_task() */
 
-    /* Par evitar perder el puntero new al hacer longjmp
-       lo guardo en r15 (callee saved) */
+    /* Para asegurarme de mantener el puntero new
+       lo guardo en r15 */
     asm("movq %0, %%r15\n"
         :
         : "g" (new));
@@ -309,6 +309,7 @@ void scheduler(int signum, siginfo_t *data, void* extra)
 void start_sched(Task *maintask)
 {
 	/* Setting de timer, señales y handler */
+
     /* Señales a bloquear durante la ejecucion de scheduler */
     sigset_t *block_these = malloc(sizeof(sigset_t));;
     if (block_these == NULL)
@@ -320,6 +321,7 @@ void start_sched(Task *maintask)
        sigdelset(block_these,SIGINT) ||
        sigdelset(block_these,SIGKILL))
         __error("Error in signal config", 22);
+
     /* Accion de las señales */
     struct sigaction *sa = malloc(sizeof(struct sigaction));
     sa -> sa_sigaction = scheduler;
@@ -331,12 +333,14 @@ void start_sched(Task *maintask)
         __error("Error setting sigaction", 23);
     if (sigaction(SIG_TASK_END, sa, &old_end_sig))
         __error("Error setting sigaction", 23);
+
     /* Setting de sched_yield_timer */
     struct sigevent *yield_se = malloc(sizeof(struct sigevent));
     yield_se -> sigev_notify = SIGEV_SIGNAL;
     yield_se -> sigev_signo = SIG_TASK_YIELD;
     if (timer_create(CLOCK_REALTIME, yield_se, &sched_yield_timer))
         __error("Error creating timer", 20);
+
     /* Setting de sched_lift_timer */
     struct sigevent *lift_se = malloc(sizeof(struct sigevent));
     lift_se -> sigev_notify = SIGEV_NONE;
@@ -346,6 +350,7 @@ void start_sched(Task *maintask)
         __error("Error setting timer", 19);
     sched_lift_timespec.it_value.tv_sec = SCHED_LIFT_SECS;
     sched_lift_timespec.it_value.tv_nsec = SCHED_LIFT_NSECS;
+    
     /* Setting de sched_idletask_timer */
     struct sigevent *idletask_se = malloc(sizeof(struct sigevent));
     idletask_se -> sigev_notify = SIGEV_SIGNAL;

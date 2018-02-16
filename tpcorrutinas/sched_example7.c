@@ -53,8 +53,8 @@ int main(void)
     create_task(f2, NULL, &f4t);
     join_task(&f3t);
     join_task(&f4t);
-    //destroy_sched();
-    //check_print("sched destroyed",15);
+    destroy_sched();
+    check_print("sched destroyed",15);
     printf("Counter2 is %d\n", counter2);
     return 0;
 }

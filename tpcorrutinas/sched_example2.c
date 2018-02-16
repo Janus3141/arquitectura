@@ -63,6 +63,7 @@ int main(void)
             counter++;
         }
     }
+    // unblock_sched();
     void *f1res = join_task(&f1t);
     write(STDOUT_FILENO, (char *) f1res, 7);
     join_task(&f2t);

@@ -54,10 +54,8 @@ int main(void)
     char f2arg[] = "f2arg\n";
     create_task(f1, NULL, &f1t);
     create_task(f2, f2arg, &f2t);
-    //block_sched();
     char thearray[100];
     long long counter = 0;
-    //unblock_sched();
     while (1) {
         for (char a = 'a'; a <= 'z'; a++) {
             for (char i = 0; i < 100; i++)

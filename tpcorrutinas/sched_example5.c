@@ -44,12 +44,6 @@ void *f2(void *a)
 
 int main(void)
 {
-    /*
-    cpu_set_t set;
-    CPU_ZERO(&set);
-    CPU_SET(0,&set);
-    sched_setaffinity(getpid(),sizeof(set),&set);
-    */
     Task maint, f1t, f2t, f3t, f4t;
     start_sched(&maint);
     /*create_task(f1, NULL, &f1t);
@@ -61,8 +55,8 @@ int main(void)
     create_task(f2, NULL, &f4t);
     join_task(&f3t);
     join_task(&f4t);
-    //destroy_sched();
-    //check_print("sched destroyed",15);
+    destroy_sched();
+    check_print("sched destroyed",15);
     printf("Counter2 is %d\n", counter2);
     return 0;
 }

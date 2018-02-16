@@ -42,18 +42,25 @@ void queue_destroy(pqueue *q)
 void queue_insert(pqueue *q, q_elem *elem)
 {
     // El caller debe ocuparse del nivel en que se inserta elem
+    /* Caso donde la cola en la cual se inserta esta vacia */
     if ((q->size)[elem->lvl] == 0) {
+        /* Ya se puede insertar elem al final de su cola */
         (q -> backs)[elem -> lvl] = elem;
+
+        /* Si no hay elementos en ninguna cola, elem pasa a ser el frente */
         if (q -> front == NULL)
             q -> front = elem;
+
+        /* Si el actual frente de la cola tiene una prioridad menor que elem,
+           tambien elem pasa a ser el frente */
         else if ((q -> front) -> lvl > elem -> lvl) {
-            /* En este caso, q->front->lvl != 0 y elem->lvl != maxlvl */
             elem -> next = q -> front;
             q -> front = elem;
         }
+
+        /* Si no, hay elementos con mayor prioridad que elem */
         else {
-            /* Busco vecinos hacia el frente de la cola. Seguro hay
-               por condicion anterior falsa */
+            /* Busco el vecino mas proximo hacia el frente de la cola */
             for (char i = elem->lvl - 1; i >= 0; i--) {
                 if ((q->size)[i] != 0) {
                     elem -> next = (q->backs)[i] -> next;
@@ -64,6 +71,7 @@ void queue_insert(pqueue *q, q_elem *elem)
             }
         }
     }
+    /* La cola no esta vacia, solamente hay que agregar elem al final */
     else {
         elem -> next = (q->backs)[elem->lvl] -> next;
         (q->backs)[elem->lvl] -> next = elem;
@@ -110,14 +118,21 @@ q_elem *queue_pop(pqueue *q)
 
 void queue_lift(pqueue *q)
 {
+    /* total_size servira despues para indicar el tamaño
+       de la cola 0, que tendra a todos los elementos */
     int total_size = 0;
+    /* Se realiza la suma de tamaños mientras se deja en
+       0 el tamaño de cada cola */
     for (int i = 0; i <= q->maxlevel; i++) {
         total_size += (q->size)[i];
         (q->size)[i] = 0;
     }
+    /* Si no habia nada en la cola se retorna */
     if (total_size <= 0)
         return;
     (q->size)[0] = total_size;
+
+    /* Se deja el nivel de cada elemento en 0 */
     q_elem *iter = q->front;
     while (iter->next != NULL) {
         iter->lvl = 0;
@@ -125,6 +140,9 @@ void queue_lift(pqueue *q)
     }
     iter -> lvl = 0;
     (q->backs)[0] = iter;
+
+    /* Todos los finales de cola se dejan en NULL,
+       excepto en la 0 */
     for (int i = 1; i <= q->maxlevel; i++)
         (q->backs)[i] = NULL;
     return;
