@@ -83,15 +83,19 @@ scheduler, en ella se puede: insertar un nuevo nodo con la prioridad más
 alta (\textit{pqueue\_new\_node}), reinsertar un nodo con una prioridad
 cualquiera (\textit{pqueue\_insert}), quitar y poseer el primer elemento
 de la cola (\textit{pqueue\_pop}) y mover todos los elementos a la mayor
-prioridad (\textit{pqueue\_lift}, una función específica para este scheduler).
-Esta implementación es bastante flexible y simple para ayudar a mantener
-así también el código del scheduler. \\
+prioridad (\textit{pqueue\_lift} (una función específica para este scheduler).
+Esta implementación es lo bastante flexible y simple como para ayudar a
+mantener así también el código del scheduler. \\
 Para comenzar a utilizarlo, primero se deberá reservar espacio para una
 estructura Task. Esta contiene toda la información necesaria para
 administrar la ejecución de la tarea: 
 \begin{itemize}
-    \item Un buffer sobre el cual se ejecuta \textit{setjmp} y
-    \textit{longjmp} para controlar el hilo de ejecución,
+    \item Un buffer, \textit{context}, que mantiene el contexto actual al
+    momento de quitarle el procesador a la tarea. Para hacerlo se
+    implementaron funciones que tratan de emular a \textit{setjmp} y
+    \textit{longjmp} en el archivo \textit{jmp.s}. Estas funciones guardan
+    y restauran, respectivamente, todos los registros x86\_64 (excepto rax,
+    y sólo guarda parte de rflags),
     \item Una variable \textit{Task\_State} que mantiene el estado actual
     de la tarea. Se consideran en este trabajo cuatro estados: activa
     (la tarea está utilizando el procesador), lista (desea utilizar el
@@ -144,9 +148,9 @@ señales de POSIX-1. Luego se crean tres timers:
 \end{description}
 Lo siguiente en \textit{start\_sched} es setear los valores de la
 estructura \textit{maintask}. El miembro \textit{mem\_position} es
-iniciado con la función \textit{take\_stack}, esta es en realidad una
-macro definida que abstrae a \textit{memory\_manager},
-la cual controla los segmentos de stack que posee cada tarea. Puede
+iniciado con la función \textit{take\_stack}. Esta es en realidad una
+macro definida que abstrae a \textit{memory\_manager}, una función que
+controla los segmentos de stack que posee cada tarea. Puede
 entregar a una nueva tarea un puntero al próximo segmento libre (que
 ninguna otra está usando) o una tarea puede indicarle que no utilizará
 más su segmento con la macro \textit{release\_stack}, y el manager lo
@@ -157,7 +161,7 @@ parametrizada la cantidad de colas (prioridades) que se utilizarán
 con la macro \textit{QUEUE\_NUMBER}. Observar que puede crearse un
 scheduler Round Robin si se define \textit{QUEUE\_NUMBER = 1}. Finalmente
 se pone un checkpoint en el lugar con la macro \textit{YIELD},
-básicamente una llamada a \textit{setjmp}, y se llama al scheduler.\\
+básicamente una llamada a \textit{setjmp2}, y se llama al scheduler.\\
 El funcionamiento del scheduler en general es como sigue:
 \begin{enumerate}
     \item El primer paso es desencolar la pr\'oxima tarea a ejecutar.
@@ -240,31 +244,36 @@ prioridad 0 en la cola.
 
 
 \section{Locks}
-Los locks se encuentran implementados en \textit{locks.c}, en forma
+Los locks se encuentran implementados en \textit{locks.s}, en forma
 de spinlocks (por lo cual se los nombra \textit{sp}). Los lock tienen
 por tipo \textit{task\_sp\_t}, un sin\'onimo para \textit{long long},
-y pueden tener dos valores, \textit{TASK\_SP\_LOCK} o 
-\textit{TASK\_SP\_UNLOCK}. Para crear un lock simplemente se declara una
-variable \textit{task\_sp\_t} con el valor \textit{TASK\_SP\_INIT}. Una
-tarea pide un lock con \textit{task\_sp\_lock} pasando el puntero a la
-variable declarada, y luego lo suelta llamando a
-\textit{task\_sp\_unlock}.\\
+y se usan sólo dos valores: 1 y 0. Para crear un lock simplemente
+se declara una variable \textit{task\_sp\_t} con el valor
+\textit{TASK\_SP\_INIT}. Una tarea pide un lock con
+\textit{task\_sp\_lock} pasando el puntero a la variable declarada, y
+luego lo suelta llamando a \textit{task\_sp\_unlock}.\\
 El algoritmo para adquirir un lock se basa en la instrucci\'on de x86\_64
-\textit{xchg}, la cual intercambia dos variables at\'omicamente. En la
-funci\'on para adquirir el lock, primero se declara una variable con
-valor \textit{TASK\_SP\_LOCK}, para intercambiarla luego con el lock
-argumento, mediante \textit{xchg}. Entonces se prueba el valor de la
-variable local, si sigue siendo \textit{TASK\_SP\_LOCK} es porque el
-lock est\'a tomado, entonces se suelta el procesador para volver a
-probar suerte en la pr\'oxima ejecuci\'on; si en cambio el valor ahora
-es \textit{TASK\_SP\_UNLOCK}, es porque se adquiri\'o el lock, entonces
-se puede empezar a trabajar en la secci\'on cr\'itica. Para soltar un
-lock, s\'olo se le debe devolver el valor \textit{TASK\_SP\_UNLOCK}. \\
+\textit{cmpxchg}; esta toma dos operandos, \textit{source} y
+\textit{destination}, en ese orden, y realiza lo que se puede describir
+con el siguiente pseudoc\'odigo:
+\begin{verbatim}
+if (rax == destination) {
+    ZF <- 1;
+    destination <- source;
+}
+else {
+    ZF <- 0;
+    rax <- destination;
+}
+\end{verbatim}
+La comparaci\'on y asignaciones se realizan at\'omicamente, lo da
+fiabilidad al lock. Luego, para soltarlo, s\'olo basta devolver el
+valor \textit{TASK\_SP\_UNLOCK}. \\
 Este tipo de lock sufre algunas desventajas:
 \begin{itemize}
     \item Pueden darse casos de starvation cuando una tarea no llega
     a tomar un lock. Esto se debe a que no existe un orden al pedirlo,
-    las tareas se encuentran en condici\'on de carrera.
+    las tareas se encuentran en race condition.
     \item Si una tarea mantiene el lock por un tiempo prolongado, se
     genera una p\'erdida de rendimiento debido a la gran cantidad de
     cambios de contextos innecesarios generados por la espera activa
@@ -277,8 +286,8 @@ sino que pasar\'a a bloquearse y esperar en una cola hasta que el actual
 dueño del lock lo suelte, y llame al primero en la cola. Esto se
 encuentra implementado en los archivos \textit{locks2.c} y
 \textit{locks2.h}. Se debe mencionar que tampoco son infalibles ya que
-generan tambi\'en una ca\'ida de rendimiento cuando los tiempos de
-retenci\'on de locks son muy cortos.
+generan tambi\'en una importante ca\'ida de rendimiento cuando los
+tiempos de retenci\'on de locks son muy cortos.
 
 \section{Comunicación}
 La comunicación entre procesos se realiza mediante shared memory, y

@@ -12,7 +12,7 @@ task_sp_lock:
     trylock:
         movl $1, %eax
         movl $0, %ecx
-        lock cmpxchg %rcx, (%rbx)
+        cmpxchg %rcx, (%rbx)
         jnz yield
     ret
 

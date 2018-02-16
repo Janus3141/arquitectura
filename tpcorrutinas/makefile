@@ -20,6 +20,10 @@ ex5:  scheduler.o pqueue.o shmem.o gerror.o
 ex6:  scheduler.o pqueue.o shmem.o gerror.o
 > gcc sched_example6.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks.s src/jmp.s -lrt -g -o sched_example
 
+ex7:  scheduler.o pqueue.o shmem.o gerror.o locks2.o
+> gcc sched_example7.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks2.o src/locks.s src/jmp.s -lrt -g -o sched_example
+
+
 
 scheduler.o: src/scheduler.c
 > gcc -g -c src/scheduler.c -o src/scheduler.o
@@ -33,7 +37,11 @@ shmem.o: src/shmem.c
 gerror.o: src/gerror.c
 > gcc -g -c src/gerror.c -o src/gerror.o
 
+locks2.o: src/locks2.c
+> gcc -g -c src/locks2.c -o src/locks2.o
+
+
 
 clean:
-> rm sched_example src/scheduler.o src/pqueue.o src/shmem.o src/locks.o src/gerror.o
+> rm sched_example src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks2.o
 
