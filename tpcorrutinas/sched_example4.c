@@ -58,10 +58,15 @@ int main(void)
     char buffer[100];
     while (1)
     {
-        struct pollfd pfd = {.fd = STDOUT_FILENO,
+        /* Preparo pfd para hacer poll sobre entrada standard */
+        struct pollfd pfd = {.fd = STDIN_FILENO,
                              .events = POLLIN};
+        /* Si task_poll retorna algo que no sea mayor que cero es un
+           error, asi que se verifica. Tambien se verifica que la
+           condicion que hizo retornar a poll sea POLLIN, es decir que
+           haya algo para leer (lado derecho de &&) */
         if (task_poll(&pfd, 1) && pfd.revents & POLLIN) {
-            ssize_t hm = read(STDOUT_FILENO, buffer, 100);
+            ssize_t hm = read(STDIN_FILENO, buffer, 100);
             write(STDOUT_FILENO, buffer, hm);
         }
         else

@@ -165,9 +165,6 @@ básicamente una llamada a \textit{setjmp2}, y se llama al scheduler.\\
 El funcionamiento del scheduler en general es como sigue:
 \begin{enumerate}
     \item El primer paso es desencolar la pr\'oxima tarea a ejecutar.
-    Si primero se encola la tarea que se estaba ejecutando, es probable
-    que esa tarea tenga una alta prioridad, y vuelva a ser elegida por
-    el scheduler, lo que llevar\'ia a un starving de las dem\'as tareas.
     Esto hace necesaria la existencia de la tarea 'idle', ya que puede
     suceder que no haya otra tarea en cola, y no habr\'ia nada que
     ejecutar luego. Cuando se desencola una tarea, se debe asegurar que
@@ -197,7 +194,7 @@ El funcionamiento del scheduler en general es como sigue:
     \item Si la señal que llegó es \textit{SIG\_TASK\_NEW}, se deberá
     introducir, al final de la cola de espera de mayor priorida, la
     nueva tarea. Su puntero (\textit{Task *}) se pasa como argumento
-    en \textit{data -> si\_value.sival\_ptr}.
+    en \textit{data $\to$ si\_value.sival\_ptr}.
     \item Cada cierto tiempo es prudente subir la prioridad de todas
     las tareas en la cola de espera a la más alta. Esto permite
     evitar starvations y mejora la dinámica del scheduler, haciendo
@@ -230,8 +227,9 @@ puntero a la tarea a bloquear, simplemente cambia el estado de esa
 tarea a \textit{BLOCKED}, siempre que el estado anterior no sea
 \textit{ZOMBIE}. La tarea eventualmente ser\'a desencolada para ponerla
 en ejecuci\'on. Cuando esto sucede, si la tarea tiene estado
-\textit{BLOCKED}, procederá a eliminar el qelem correspondiente
-(no la tarea) y a desencolar otra tarea que no esté bloqueada.\\
+\textit{BLOCKED}, el scheduler procederá a eliminar el qelem
+correspondiente (no la tarea) y a desencolar otra tarea que no
+esté bloqueada.\\
 Para desbloquear una tarea se utiliza \textit{unblock\_task}.
 La función le devuelve el estado
 \textit{READY} y diferencia entre dos casos: la tarea está en la
