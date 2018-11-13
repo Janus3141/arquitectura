@@ -1,47 +1,35 @@
 
 .RECIPEPREFIX = >
 
+CC = gcc
 
-ex1: scheduler.o pqueue.o shmem.o gerror.o
-> gcc sched_example.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks.s src/jmp.s -lrt -g -o sched_example
+PROGRAM = sched_example
 
-ex2: scheduler.o pqueue.o shmem.o gerror.o
-> gcc sched_example2.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks.s src/jmp.s -lrt -g -o sched_example
+IDIR = include
+ODIR = obj
+SDIR = src
+EDIR = examples
 
-ex3: scheduler.o pqueue.o shmem.o gerror.o
-> gcc sched_example3.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks.s src/jmp.s -lrt -g -o sched_example
+CFLAGS = -I$(IDIR) -g
 
-ex4:  scheduler.o pqueue.o shmem.o gerror.o
-> gcc sched_example4.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks.s src/jmp.s -lrt -g -o sched_example
+LIBS = -lrt
 
-ex5:  scheduler.o pqueue.o shmem.o gerror.o
-> gcc sched_example5.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks.s src/jmp.s -lrt -g -o sched_example
+_DEPS = scheduler.h pqueue.h shmem.h gerror.h locks2.h
+DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-ex6:  scheduler.o pqueue.o shmem.o gerror.o
-> gcc sched_example6.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks.s src/jmp.s -lrt -g -o sched_example
+_OBJ = scheduler.o pqueue.o shmem.o gerror.o locks2.o
+OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
-ex7:  scheduler.o pqueue.o shmem.o gerror.o locks2.o
-> gcc sched_example7.c src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks2.o src/locks.s src/jmp.s -lrt -g -o sched_example
+ASM = $(SDIR)/jmp.s $(SDIR)/locks.s
+
+$(ODIR)/%.o: $(SDIR)/%.c $(DEPS)
+> $(CC) -c $< -o $@ $(CFLAGS)
 
 
-
-scheduler.o: src/scheduler.c
-> gcc -g -c src/scheduler.c -o src/scheduler.o
-
-pqueue.o: src/pqueue.c
-> gcc -g -c src/pqueue.c -o src/pqueue.o
-
-shmem.o: src/shmem.c
-> gcc -g -c src/shmem.c -o src/shmem.o
-
-gerror.o: src/gerror.c
-> gcc -g -c src/gerror.c -o src/gerror.o
-
-locks2.o: src/locks2.c
-> gcc -g -c src/locks2.c -o src/locks2.o
-
+ex1 ex2 ex3 ex4 ex5 ex6 ex7: $(OBJ) $(ASM)
+> $(CC) $(subst ex,$(EDIR)/sched_example,$@.c) -o $(PROGRAM) $^ $(CFLAGS) $(LIBS) 
 
 
 clean:
-> rm sched_example src/scheduler.o src/pqueue.o src/shmem.o src/gerror.o src/locks2.o
+> rm -f $(ODIR)/*.o $(PROGRAM)
 

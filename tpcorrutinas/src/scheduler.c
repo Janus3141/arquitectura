@@ -1,8 +1,6 @@
 
 /* Implementaciones de funciones del scheduler */
 
-// TO DO
-/* Comentario sobre codigo */
 
 #include <signal.h>
 #include <time.h>
