@@ -5,7 +5,9 @@ Libreria de corrutinas apropiativas, implementadas a partir de saltos no locales
 
 Para probar los ejemplos:
   $ make ex[i]
+  
   $ ./sched_example
+  
 1 <= i <= 7
 
 Source Latex del informe en la carpeta inf.
